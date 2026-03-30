@@ -1,0 +1,23 @@
+# postgres-values.yaml
+# This file contains the configuration values for the PostgreSQL Helm chart.
+
+# For a full list of options, see: https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+
+global:
+  postgresql:
+    auth:
+      # The username for the PostgreSQL superuser.
+      username: "postgres"
+      # The password for the PostgreSQL superuser.
+      password: "password"
+      # A default database for general use.
+      # Additional databases can be created dynamically using `task db:create`.
+      database: "devdb"
+
+primary:
+  service:
+    type: NodePort
+    nodePort: 30000
+  persistence:
+    enabled: true
+    size: 1Gi

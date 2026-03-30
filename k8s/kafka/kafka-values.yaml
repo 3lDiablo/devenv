@@ -1,0 +1,51 @@
+# kafka-values.yaml
+# This file contains the configuration values for the Kafka Helm chart.
+# The image tag is injected at runtime by the Taskfile from the .env file.
+
+# We use the Bitnami Kafka chart.
+# For a full list of options, see: https://github.com/bitnami/charts/tree/main/bitnami/kafka
+
+# We're enabling KRaft mode, which simplifies the Kafka architecture by removing the need for Zookeeper.
+kraft:
+  enabled: true
+
+controller:
+  # In KRaft mode, some brokers also act as controllers.
+  # We're using a combined node setup for simplicity in our local environment.
+  replicaCount: 1
+  # By enabling persistence here, we ensure the controller's state (like metadata about brokers, topics, and partitions) is saved.
+  persistence:
+    enabled: true
+    size: 1Gi
+
+broker:
+  replicaCount: 1
+  # By enabling persistence here, we ensure the broker's state (the actual topic data/messages) is saved.
+  persistence:
+    enabled: true
+    size: 1Gi
+
+# The service configuration for the Kafka brokers.
+service:
+  # We're using NodePort to expose Kafka outside the cluster.
+  type: NodePort
+  # The Bitnami chart now expects a map for nodePorts, specifying a port for each listener.
+  # We are only concerned with the 'external' listener for localhost access.
+  nodePorts:
+    external: 30001
+
+#  Listeners configuration defines how clients connect to Kafka.
+listeners:
+  # The client listener is for internal cluster communication.
+  client:
+    protocol: PLAINTEXT
+  # The external listener is for clients outside the Kubernetes cluster.
+  external:
+    protocol: PLAINTEXT
+    # We're advertising the external listener on the host port we mapped in kind-cluster.yaml.
+    advertised:
+      listeners: "localhost:9094"
+
+# We don't need Zookeeper in KRaft mode.
+zookeeper:
+  enabled: false

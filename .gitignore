@@ -1,0 +1,18 @@
+# IDE and local environment files
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Local configuration
+# This file can contain secrets and should not be committed.
+# A template should be provided instead.
+.env
+
+# Local data and logs
+/data/
+/logs/
+*.log
+
+# Taskfile cache
+.task/

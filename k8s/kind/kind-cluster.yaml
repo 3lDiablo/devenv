@@ -1,0 +1,31 @@
+# kind-cluster.yaml
+# This file defines the configuration for our local Kubernetes cluster using kind.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  # This patch adds a label to the control-plane node.
+  # This is useful for targeting deployments to specific nodes.
+  # In our case, we'll use it to ensure our ingress controller runs on this node.
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  # extraPortMappings allows us to map ports from the host machine to the Kubernetes node.
+  # This is how we'll access our services without needing `kubectl port-forward`.
+  extraPortMappings:
+  # Map host port 5432 to node port 30000 for PostgreSQL
+  - containerPort: 30000
+    hostPort: 5432
+    protocol: TCP
+  # Map host port 9094 to node port 30001 for Kafka
+  - containerPort: 30001
+    hostPort: 9094
+    protocol: TCP
+  # extraMounts allows us to mount a directory from the host machine into the node.
+  # This is how we'll persist data across cluster restarts.
+  extraMounts:
+  - hostPath: ./data
+    containerPath: /data

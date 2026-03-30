@@ -1,0 +1,193 @@
+# Taskfile.yml
+# https://taskfile.dev
+
+version: '3'
+
+# Load environment variables from the .env file as the single source of truth.
+dotenv: ['.env']
+
+# This file has no local variables. All config is in .env.
+vars:
+  KUBE_CONTEXT: "kind-{{.CLUSTER_NAME}}"
+
+tasks:
+  default:
+    desc: 'Lists all available tasks.'
+    cmds:
+      - task -l
+    silent: true
+
+  # ------------------------------------------------------------------
+  # 🚀 Environment Lifecycle
+  # ------------------------------------------------------------------
+
+  up:
+    desc: '▶️  Starts or updates the complete environment (cluster + services).'
+    deps: [check:prereqs]
+    cmds:
+      - task: cluster:prepare
+      - task: services:up
+      - |
+        echo "✅ Environment '{{.CLUSTER_NAME}}' is ready!"
+        echo "   - 🐘 PostgreSQL ({{.POSTGRES_IMAGE_TAG}}) on localhost:5432"
+        echo "   -  kafka Kafka ({{.KAFKA_IMAGE_TAG}}) on localhost:9094"
+
+  down:
+    desc: '⏹️  Stops and deletes the complete environment.'
+    cmds:
+      - task: cluster:down
+
+  reinstall:
+    desc: '🔄 Force reinstalls all services for a clean state.'
+    cmds:
+      - task: postgres:reinstall
+      - task: kafka:reinstall
+    silent: true
+
+  # ------------------------------------------------------------------
+  # 🛠️ Setup
+  # ------------------------------------------------------------------
+
+  setup:
+    desc: '🔧 Installs all necessary tools using Homebrew (macOS only).'
+    cmds:
+      - |
+        if ! command -v brew &> /dev/null; then
+          echo "❌ Homebrew is not installed. Please install it first: https://brew.sh/"
+          exit 1
+        fi
+        echo "--- 🍺 Installing tools with Homebrew ---"
+        brew install kind kubectl helm
+    silent: true
+
+  # ------------------------------------------------------------------
+  # ⚙️ Component Tasks
+  # ------------------------------------------------------------------
+
+  cluster:prepare:
+    internal: true
+    cmds:
+      - |
+        echo "--- ☸️  Preparing Kubernetes Cluster '{{.CLUSTER_NAME}}' ---"
+        if ! kind get clusters | grep -q "^{{.CLUSTER_NAME}}$"; then
+          echo "Cluster '{{.CLUSTER_NAME}}' not found. Creating..."
+          kind create cluster --config k8s/kind/kind-cluster.yaml --name {{.CLUSTER_NAME}}
+        else
+          echo "Cluster '{{.CLUSTER_NAME}}' already exists."
+        fi
+      - |
+        echo "\n--- 📦 Updating Helm Repositories ---"
+        helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
+        helm repo update
+    silent: true
+
+  cluster:down:
+    internal: true
+    cmds:
+      - echo "--- 🔥 Deleting cluster '{{.CLUSTER_NAME}}' ---"
+      - kind delete cluster --name {{.CLUSTER_NAME}}
+    silent: true
+
+  services:up:
+    internal: true
+    cmds:
+      - task: postgres:up
+      - task: kafka:up
+    silent: true
+
+  # ------------------------------------------------------------------
+  # Postgres Tasks
+  # ------------------------------------------------------------------
+
+  postgres:up:
+    internal: true
+    cmds:
+      - >
+        helm upgrade --install postgres bitnami/postgresql
+        -f k8s/postgres/postgres-values.yaml
+        --set image.tag={{.POSTGRES_IMAGE_TAG}}
+        --kube-context {{.KUBE_CONTEXT}}
+        --wait
+    silent: true
+
+  postgres:down:
+    internal: true
+    cmds:
+      - helm uninstall postgres --kube-context {{.KUBE_CONTEXT}} || true
+    silent: true
+
+  postgres:reinstall:
+    desc: '🐘 Force reinstalls the PostgreSQL service.'
+    cmds:
+      - echo "--- 🐘 Reinstalling PostgreSQL ---"
+      - task: postgres:down
+      - task: postgres:up
+    silent: true
+
+  # ------------------------------------------------------------------
+  # Kafka Tasks
+  # ------------------------------------------------------------------
+
+  kafka:up:
+    internal: true
+    cmds:
+      - >
+        helm upgrade --install kafka bitnami/kafka
+        -f k8s/kafka/kafka-values.yaml
+        --set image.tag={{.KAFKA_IMAGE_TAG}}
+        --kube-context {{.KUBE_CONTEXT}}
+        --wait
+    silent: true
+
+  kafka:down:
+    internal: true
+    cmds:
+      - helm uninstall kafka --kube-context {{.KUBE_CONTEXT}} || true
+    silent: true
+
+  kafka:reinstall:
+    desc: ' kafka Force reinstalls the Kafka service.'
+    cmds:
+      - echo "---  kafka Reinstalling Kafka ---"
+      - task: kafka:down
+      - task: kafka:up
+    silent: true
+
+  # ------------------------------------------------------------------
+  # 💾 Database Management
+  # ------------------------------------------------------------------
+
+  db:create:
+    desc: '✨ Creates a new database and user.'
+    summary: |
+      Usage: task db:create -- <db_name> [user_name] [password]
+    cmds:
+      - |
+        DB_NAME={{index .CLI_ARGS 0}}
+        USER_NAME=${2:-$DB_NAME"_user"}
+        PASSWORD=${3:-$DB_NAME"_password"}
+        if [ -z "$DB_NAME" ]; then echo "❌ DB name missing."; exit 1; fi
+        echo "--- ✨ Creating database '$DB_NAME' ---"
+        POD_NAME=$(kubectl get pods --context {{.KUBE_CONTEXT}} -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}')
+        kubectl exec --context {{.KUBE_CONTEXT}} $POD_NAME -- psql -U postgres -c "CREATE DATABASE \"$DB_NAME\";"
+        kubectl exec --context {{.KUBE_CONTEXT}} $POD_NAME -- psql -U postgres -c "CREATE USER \"$USER_NAME\" WITH PASSWORD '$PASSWORD';"
+        kubectl exec --context {{.KUBE_CONTEXT}} $POD_NAME -- psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE \"$DB_NAME\" TO \"$USER_NAME\";"
+        echo "✅ DB created. User: $USER_NAME, Pass: $PASSWORD"
+    silent: true
+
+  # ------------------------------------------------------------------
+  # 🛠️ Prerequisite Checks
+  # ------------------------------------------------------------------
+
+  check:prereqs:
+    internal: true
+    cmds:
+      - |
+        check_command() {
+          if ! command -v "$1" &> /dev/null; then
+            echo "❌ Error: '$1' is not installed. Please install it to continue."
+            exit 1
+          fi
+        }
+        check_command docker; check_command kind; check_command kubectl; check_command helm
+    silent: true
