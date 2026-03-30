@@ -16,6 +16,10 @@ This project uses a `.env` file to manage all environment-specific configuration
 1.  **Copy the template:** `cp .env.template .env`
 2.  **Fill in the values:** Edit the `.env` file with your desired service versions and cluster name.
 
+### Image Repositories
+
+Due to a policy change by VMware, older Bitnami images are now hosted in the `bitnamilegacy` Docker Hub repository. The configuration in `.env` allows you to specify both the repository and the tag for each service, ensuring reliable and reproducible builds.
+
 ---
 
 ## 🛠️ Setup
