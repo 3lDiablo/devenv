@@ -1,6 +1,6 @@
 # 🚀 Local Development Environment on Kubernetes
 
-This project provides a complete local development environment, based on Kubernetes via `kind`. It includes essential services like PostgreSQL and Kafka (in KRaft mode), all managed simply with [Task](https://taskfile.dev/).
+This project provides a complete local development environment, based on Kubernetes via `kind`. It includes essential services like PostgreSQL, Kafka (in KRaft mode), Schema Registry, Kafka Connect, and a Kafka GUI, all managed simply with [Task](https://taskfile.dev/).
 
 ![Language](https://img.shields.io/badge/Shell-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white)
 ![Tool](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
@@ -76,21 +76,32 @@ If a service gets stuck in a bad state, you can force a clean reinstallation.
 # Reinstall all services
 task reinstall
 
-# Reinstall a specific service
-task postgres:reinstall
-task kafka:reinstall
+# Reinstall a specific service (e.g., postgres, kafka, console)
+task reinstall postgres
 ```
 
 ---
 
-## 🔌 Service Access
+## 🔌 Service Access & GUIs
 
-### 🐘 PostgreSQL &  kafka Kafka
+### 🐘 PostgreSQL
 
-Service connection details are displayed in the terminal after running `task up`.
+*   **Host**: `localhost`
+*   **Port**: `5432`
+*   **Superuser**: `postgres` / `password`
+*   **Default DB**: `devdb`
+*   **Recommended GUI**: [**Beekeeper Studio**](https://www.beekeeperstudio.io/) (modern, fast, user-friendly SQL client)
+
+###  kafka Kafka
+
+*   **Bootstrap Server**: `localhost:9094`
+*   **Schema Registry**: `localhost:8081`
+*   **Kafka Connect**: `localhost:8083`
+*   **Recommended GUI**: [**Redpanda Console**](https://redpanda.com/docs/console/get-started/) (lightweight, feature-rich, open-source)
+    *   **Access URL**: `http://localhost:8080`
 
 ---
 
 ## 📦 Data Persistence
 
-Data for both PostgreSQL and Kafka is persistent and will survive cluster restarts. To completely wipe all data, run `task down`.
+Data for all stateful services (PostgreSQL, Kafka) is persistent and will survive cluster restarts. To completely wipe all data, run `task down`.

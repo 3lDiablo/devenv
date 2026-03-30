@@ -31,6 +31,7 @@ tasks:
         echo "✅ Environment '{{.CLUSTER_NAME}}' is ready!"
         echo "   - 🐘 PostgreSQL ({{.POSTGRES_IMAGE_TAG}}) on localhost:5432"
         echo "   -  kafka Kafka ({{.KAFKA_IMAGE_TAG}}) on localhost:9094"
+        echo "   -  GUI for Kafka available on http://localhost:8080"
 
   down:
     desc: '⏹️  Stops and deletes the complete environment.'
@@ -38,10 +39,34 @@ tasks:
       - task: cluster:down
 
   reinstall:
-    desc: '🔄 Force reinstalls all services for a clean state.'
+    desc: '🔄 Force reinstalls services. Usage: task reinstall [service_name]'
     cmds:
-      - task: postgres:reinstall
-      - task: kafka:reinstall
+      - |
+        SERVICE_NAME={{index .CLI_ARGS 0}}
+        if [ -z "$SERVICE_NAME" ]; then
+          echo "--- 🔄 Reinstalling ALL services ---"
+          task: postgres:reinstall
+          task: kafka:reinstall
+          task: console:reinstall
+          echo "✅ All services have been reinstalled."
+        else
+          case "$SERVICE_NAME" in
+            postgres)
+              task: postgres:reinstall
+              ;;
+            kafka)
+              task: kafka:reinstall
+              ;;
+            console)
+              task: console:reinstall
+              ;;
+            *)
+              echo "❌ Error: Unknown service '$SERVICE_NAME'. Valid services are: postgres, kafka, console."
+              exit 1
+              ;;
+          esac
+          echo "✅ Service '$SERVICE_NAME' has been reinstalled."
+        fi
     silent: true
 
   # ------------------------------------------------------------------
@@ -78,6 +103,7 @@ tasks:
       - |
         echo "\n--- 📦 Updating Helm Repositories ---"
         helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
+        helm repo add redpanda https://charts.redpanda.com/ 2>/dev/null || true
         helm repo update
     silent: true
 
@@ -93,6 +119,7 @@ tasks:
     cmds:
       - task: postgres:up
       - task: kafka:up
+      - task: console:up
     silent: true
 
   # ------------------------------------------------------------------
@@ -155,6 +182,34 @@ tasks:
       - echo "---  kafka Reinstalling Kafka ---"
       - task: kafka:down
       - task: kafka:up
+    silent: true
+
+  # ------------------------------------------------------------------
+  # Redpanda Console (Kafka GUI) Tasks
+  # ------------------------------------------------------------------
+
+  console:up:
+    internal: true
+    cmds:
+      - >
+        helm upgrade --install redpanda-console redpanda/console
+        -f k8s/redpanda-console/values.yaml
+        --kube-context {{.KUBE_CONTEXT}}
+        --wait
+    silent: true
+
+  console:down:
+    internal: true
+    cmds:
+      - helm uninstall redpanda-console --kube-context {{.KUBE_CONTEXT}} || true
+    silent: true
+
+  console:reinstall:
+    desc: ' GUI Force reinstalls the Redpanda Console (Kafka GUI).'
+    cmds:
+      - echo "---  GUI Reinstalling Redpanda Console ---"
+      - task: console:down
+      - task: console:up
     silent: true
 
   # ------------------------------------------------------------------

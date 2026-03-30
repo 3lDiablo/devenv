@@ -4,28 +4,40 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
 - role: control-plane
-  # This patch adds a label to the control-plane node.
-  # This is useful for targeting deployments to specific nodes.
-  # In our case, we'll use it to ensure our ingress controller runs on this node.
+  # This patch adds a label to the control-plane node, which is useful for
+  # ensuring certain services (like an Ingress controller) run on a specific node.
   kubeadmConfigPatches:
   - |
     kind: InitConfiguration
     nodeRegistration:
       kubeletExtraArgs:
         node-labels: "ingress-ready=true"
-  # extraPortMappings allows us to map ports from the host machine to the Kubernetes node.
-  # This is how we'll access our services without needing `kubectl port-forward`.
+  # extraPortMappings allows us to map ports from the host machine (your laptop)
+  # to the Kubernetes node running inside Docker. This is the key to accessing
+  # our services on `localhost` without needing `kubectl port-forward`.
   extraPortMappings:
-  # Map host port 5432 to node port 30000 for PostgreSQL
+  # Service: PostgreSQL | Host Port: 5432 -> NodePort: 30000
   - containerPort: 30000
     hostPort: 5432
     protocol: TCP
-  # Map host port 9094 to node port 30001 for Kafka
+  # Service: Kafka Broker (External) | Host Port: 9094 -> NodePort: 30001
   - containerPort: 30001
     hostPort: 9094
     protocol: TCP
-  # extraMounts allows us to mount a directory from the host machine into the node.
-  # This is how we'll persist data across cluster restarts.
+  # Service: Schema Registry | Host Port: 8081 -> NodePort: 30002
+  - containerPort: 30002
+    hostPort: 8081
+    protocol: TCP
+  # Service: Kafka Connect | Host Port: 8083 -> NodePort: 30003
+  - containerPort: 30003
+    hostPort: 8083
+    protocol: TCP
+  # Service: Kafka GUI (Redpanda Console) | Host Port: 8080 -> NodePort: 30004
+  - containerPort: 30004
+    hostPort: 8080
+    protocol: TCP
+  # extraMounts allows us to mount a directory from the host into the node.
+  # This is a simple way to achieve data persistence for a local kind cluster.
   extraMounts:
   - hostPath: ./data
     containerPath: /data

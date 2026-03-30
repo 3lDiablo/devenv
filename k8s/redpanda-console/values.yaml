@@ -1,0 +1,24 @@
+# values.yaml for Redpanda Console
+
+# We are configuring the console to connect to our existing Kafka cluster.
+# For a full list of options, see: https://github.com/redpanda-data/helm-charts/tree/main/charts/console
+console:
+  config:
+    kafka:
+      brokers:
+        - "kafka:9092" # This is the internal Kubernetes service name for our Kafka broker
+      schemaRegistry:
+        enabled: true
+        urls:
+          - "http://kafka-schema-registry:8081" # Internal service name for Schema Registry
+    connect:
+      enabled: true
+      clusters:
+        - name: "kafka-connect"
+          url: "http://kafka-connect:8083" # Internal service name for Kafka Connect
+
+# Expose the Redpanda Console via a NodePort so we can access it from localhost.
+service:
+  type: NodePort
+  nodePort: 30004
+  port: 8080
