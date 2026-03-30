@@ -105,6 +105,7 @@ tasks:
       - >
         helm upgrade --install postgres bitnami/postgresql
         -f k8s/postgres/postgres-values.yaml
+        --set image.registry={{.DOCKER_REGISTRY}}
         --set image.repository={{.POSTGRES_IMAGE_REPOSITORY}}
         --set image.tag={{.POSTGRES_IMAGE_TAG}}
         --kube-context {{.KUBE_CONTEXT}}
@@ -135,6 +136,7 @@ tasks:
       - >
         helm upgrade --install kafka bitnami/kafka
         -f k8s/kafka/kafka-values.yaml
+        --set image.registry={{.DOCKER_REGISTRY}}
         --set image.repository={{.KAFKA_IMAGE_REPOSITORY}}
         --set image.tag={{.KAFKA_IMAGE_TAG}}
         --kube-context {{.KUBE_CONTEXT}}
