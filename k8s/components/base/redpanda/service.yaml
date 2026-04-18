@@ -1,0 +1,16 @@
+# Redpanda Console Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda-console
+  namespace: infrastructure
+  labels:
+    app.kubernetes.io/part-of: kafka-console
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30080 # Placeholder
+  selector:
+    app: redpanda-console

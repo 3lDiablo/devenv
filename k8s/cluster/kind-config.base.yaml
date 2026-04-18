@@ -1,0 +1,12 @@
+# ⚡ Kind Base Configuration
+# -----------------------
+# This file defines the static infrastructure of the Kind cluster.
+# Dynamic values (node image, port mappings) are merged from config.yaml
+# during the "render" stage.
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    # image: placeholder (injected by yq)
+    # extraPortMappings: placeholder (injected by yq)

@@ -1,0 +1,13 @@
+# Allow all pods within the namespace to communicate
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-all-internal # Patched by overlay
+  namespace: infrastructure
+spec:
+  podSelector: {}
+  ingress:
+  - from:
+    - podSelector: {}
+  policyTypes:
+  - Ingress

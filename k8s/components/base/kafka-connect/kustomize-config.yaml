@@ -1,0 +1,8 @@
+# Kustomize Custom Configuration for Kafka Connect
+varReference:
+- kind: KafkaConnect
+  path: spec/version
+- kind: KafkaConnect
+  path: spec/bootstrapServers
+- kind: Service
+  path: spec/ports/nodePort

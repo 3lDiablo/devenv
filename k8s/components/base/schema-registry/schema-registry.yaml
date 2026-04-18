@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry
+  namespace: infrastructure
+  labels:
+    component: schema-registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: schema-registry
+  template:
+    metadata:
+      labels:
+        app: schema-registry
+        component: schema-registry
+    spec:
+      containers:
+      - name: apicurio
+        image: quay.io/apicurio/apicurio-registry-sql:2.5.10.Final
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: QUARKUS_DATASOURCE_JDBC_URL
+          value: "jdbc:postgresql://postgres:5432/postgres"
+        - name: QUARKUS_DATASOURCE_USERNAME
+          value: "postgres"
+        - name: QUARKUS_DATASOURCE_PASSWORD
+          value: "postgres"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry
+  namespace: infrastructure
+  labels:
+    component: schema-registry
+spec:
+  type: NodePort
+  ports:
+  - port: 8081
+    targetPort: 8080
+    name: http
+    nodePort: 30081
+  selector:
+    app: schema-registry

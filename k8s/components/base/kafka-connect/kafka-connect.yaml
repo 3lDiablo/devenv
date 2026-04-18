@@ -1,0 +1,39 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnect
+metadata:
+  name: kafka-connect
+  namespace: infrastructure
+  labels:
+    component: kafka-connect
+  annotations:
+    strimzi.io/use-connector-resources: "true"
+spec:
+  version: 3.7.0
+  replicas: 1
+  bootstrapServers: kafka-cluster-kafka-bootstrap:9092
+  groupId: connect-cluster
+  configStorageTopic: connect-cluster-configs
+  offsetStorageTopic: connect-cluster-offsets
+  statusStorageTopic: connect-cluster-status
+  config:
+    config.storage.replication.factor: 1
+    offset.storage.replication.factor: 1
+    status.storage.replication.factor: 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-connect-api
+  namespace: infrastructure
+  labels:
+    component: kafka-connect
+spec:
+  type: NodePort
+  selector:
+    strimzi.io/cluster: kafka-connect
+    strimzi.io/kind: KafkaConnect
+  ports:
+    - name: rest
+      port: 8083
+      targetPort: 8083
+      nodePort: 30083

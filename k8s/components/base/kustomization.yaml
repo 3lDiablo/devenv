@@ -1,0 +1,23 @@
+# Infrastructure Base Aggregator
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Apply common rules to all components
+configurations:
+  - kustomize-config.yaml
+
+resources:
+  - strimzi
+  - postgres
+  - kafka
+  - kafka-controllers
+  - kafka-brokers
+  - kafka-connect
+  - schema-registry
+  - redpanda
+  - cloudbeaver
+
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/managed-by: devenv

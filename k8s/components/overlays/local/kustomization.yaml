@@ -1,0 +1,331 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: infrastructure
+
+resources:
+- values.yaml
+- ../../base/postgres
+- ../../base/cloudbeaver
+- ../../base/strimzi
+- ../../base/kafka-controllers
+- ../../base/kafka-brokers
+- ../../base/kafka
+- ../../base/schema-registry
+- ../../base/kafka-connect
+- ../../base/redpanda
+
+labels:
+- includeSelectors: false
+  pairs:
+    env: local
+
+configMapGenerator:
+- name: postgres-init-scripts
+  files:
+  - init-db.sql
+  options:
+    labels:
+      component: postgres
+- name: cloudbeaver-server-config
+  files:
+  - cloudbeaver.conf
+  options:
+    labels:
+      component: cloudbeaver
+- name: cloudbeaver-initial-data-config
+  files:
+  - initial-data.conf
+  options:
+    labels:
+      component: cloudbeaver
+- name: cloudbeaver-global-connections-config
+  files:
+  - data-sources.json
+  options:
+    labels:
+      component: cloudbeaver
+
+patches:
+- patch: |-
+    - op: add
+      path: /spec/template/spec/volumes/-
+      value:
+        name: init-db-volume
+        configMap:
+          name: postgres-init-scripts
+    - op: add
+      path: /spec/template/spec/containers/0/volumeMounts/-
+      value:
+        name: init-db-volume
+        mountPath: /docker-entrypoint-initdb.d
+  target:
+    kind: Deployment
+    name: postgres
+- patch: |-
+    - op: add
+      path: /spec/template/spec/initContainers
+      value:
+        - name: wait-for-postgres
+          image: docker.io/library/postgres:17.0-alpine
+          env:
+            - name: PGUSER
+              value: "postgres"
+            - name: PGPASSWORD
+              value: "postgres"
+          command: ['sh', '-c', 'until pg_isready -h postgres -p 5432 -U $(PGUSER) -d cloudbeaver; do echo "Waiting for cloudbeaver database..."; sleep 2; done;']
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: CB_ADMIN_NAME
+        value: "admin"
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: CB_ADMIN_PASSWORD
+        value: "admin"
+    - op: add
+      path: /spec/template/spec/volumes/-
+      value:
+        name: server-config-volume
+        configMap:
+          name: cloudbeaver-server-config
+    - op: add
+      path: /spec/template/spec/volumes/-
+      value:
+        name: initial-data-volume
+        configMap:
+          name: cloudbeaver-initial-data-config
+    - op: add
+      path: /spec/template/spec/containers/0/volumeMounts/-
+      value:
+        name: server-config-volume
+        mountPath: /opt/cloudbeaver/conf/cloudbeaver.conf
+        subPath: cloudbeaver.conf
+    - op: add
+      path: /spec/template/spec/containers/0/volumeMounts/-
+      value:
+        name: initial-data-volume
+        mountPath: /opt/cloudbeaver/conf/initial-data.conf
+        subPath: initial-data.conf
+  target:
+    kind: Deployment
+    name: cloudbeaver
+
+replacements:
+# --- Postgres ---
+- source:
+    fieldPath: data.settings_postgres_db_name
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.0.value
+    select:
+      kind: Deployment
+      name: postgres
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.0.value
+    options:
+      delimiter: /
+      index: 3
+    select:
+      kind: Deployment
+      name: schema-registry
+- source:
+    fieldPath: data.settings_postgres_user
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.1.value
+    select:
+      kind: Deployment
+      name: postgres
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.1.value
+    select:
+      kind: Deployment
+      name: schema-registry
+  - fieldPaths:
+    - spec.template.spec.initContainers.0.env.0.value
+    select:
+      kind: Deployment
+      name: cloudbeaver
+- source:
+    fieldPath: data.settings_postgres_password
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.2.value
+    select:
+      kind: Deployment
+      name: postgres
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.2.value
+    select:
+      kind: Deployment
+      name: schema-registry
+  - fieldPaths:
+    - spec.template.spec.initContainers.0.env.1.value
+    select:
+      kind: Deployment
+      name: cloudbeaver
+- source:
+    fieldPath: data.settings_cloudbeaver_admin_user
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.0.value
+    select:
+      kind: Deployment
+      name: cloudbeaver
+- source:
+    fieldPath: data.settings_cloudbeaver_admin_password
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.1.value
+    select:
+      kind: Deployment
+      name: cloudbeaver
+- source:
+    fieldPath: data.cluster_ports_1_node
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.ports.0.nodePort
+    select:
+      kind: Service
+      name: postgres
+# --- Kafka ---
+- source:
+    fieldPath: data.settings_kafka_version
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.kafka.version
+    select:
+      kind: Kafka
+      name: kafka-cluster
+  - fieldPaths:
+    - spec.version
+    select:
+      kind: KafkaConnect
+      name: kafka-connect
+- source:
+    fieldPath: data.settings_kafka_metadata_version
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.kafka.metadataVersion
+    select:
+      kind: Kafka
+      name: kafka-cluster
+- source:
+    fieldPath: data.settings_kafka_broker_replicas
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.replicas
+    select:
+      kind: KafkaNodePool
+      name: brokers
+- source:
+    fieldPath: data.settings_kafka_controller_replicas
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.replicas
+    select:
+      kind: KafkaNodePool
+      name: controllers
+- source:
+    fieldPath: data.cluster_ports_0_node
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.kafka.listeners.1.configuration.bootstrap.nodePort
+    select:
+      kind: Kafka
+      name: kafka-cluster
+- source:
+    fieldPath: data.cluster_ports_2_node
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.ports.0.nodePort
+    select:
+      kind: Service
+      name: schema-registry
+- source:
+    fieldPath: data.cluster_ports_3_node
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.ports.0.nodePort
+    select:
+      kind: Service
+      name: kafka-connect-api
+- source:
+    fieldPath: data.cluster_ports_5_node
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.ports.0.nodePort
+    select:
+      kind: Service
+      name: cloudbeaver
+# --- Images ---
+- source:
+    fieldPath: data.images_postgres_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.image
+    select:
+      kind: Deployment
+      name: postgres
+- source:
+    fieldPath: data.images_cloudbeaver_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.image
+    select:
+      kind: Deployment
+      name: cloudbeaver
+- source:
+    fieldPath: data.images_strimzi_operator_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.image
+    select:
+      kind: Deployment
+      name: strimzi-cluster-operator
+- source:
+    fieldPath: data.images_redpanda_console_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.image
+    select:
+      kind: Deployment
+      name: redpanda-console

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redpanda-console
+  namespace: infrastructure
+  labels:
+    component: redpanda
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda-console
+  template:
+    metadata:
+      annotations:
+        # Increment this value to force a redeployment when the configmap changes
+        config-version: "2"
+      labels:
+        app: redpanda-console
+        component: redpanda
+    spec:
+      containers:
+      - name: redpanda-console
+        image: docker.redpanda.com/redpandadata/console:v3.7.1
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: CONFIG_FILEPATH
+          value: /etc/redpanda/config.yaml
+        volumeMounts:
+        - name: redpanda-console-config
+          mountPath: /etc/redpanda
+      volumes:
+      - name: redpanda-console-config
+        configMap:
+          name: redpanda-console-config

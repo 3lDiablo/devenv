@@ -1,0 +1,69 @@
+# ⚡ Centralized Project Configuration
+# ---------------------------------
+cluster:
+  name: "dev-cluster"
+  provider: "podman"
+  node_image: "kindest/node:v1.31.0"
+  ports:
+    - name: kafka-broker
+      host: 9092
+      node: 30092
+    - name: postgres
+      host: 5432
+      node: 30432
+    - name: schema-registry
+      host: 8081
+      node: 30081
+    - name: kafka-connect
+      host: 8083
+      node: 30083
+    - name: redpanda-console
+      host: 8080
+      node: 30080
+    - name: cloudbeaver
+      host: 8978
+      node: 30978
+
+images:
+  postgres:
+    registry: docker.io
+    repository: library/postgres
+    tag: "17.0-alpine"
+  strimzi_operator:
+    registry: quay.io
+    repository: strimzi/operator
+    tag: "0.51.0"
+  kafka:
+    registry: quay.io
+    repository: strimzi/kafka
+    tag: "0.51.0-kafka-4.2.0"
+  schema_registry:
+    registry: quay.io
+    repository: apicurio/apicurio-registry-sql
+    tag: "2.5.10.Final"
+  redpanda_console:
+    registry: docker.redpanda.com/redpandadata/console
+    tag: "v3.7.1"
+  cloudbeaver:
+    registry: docker.io
+    repository: dbeaver/cloudbeaver
+    tag: "26.0.2"
+
+settings:
+  kafka:
+    cluster_name: "kafka-cluster"
+    version: "4.2.0"
+    metadata_version: "4.2-IV0"
+    broker_replicas: 1
+    controller_replicas: 1
+    default_partitions: 6
+  
+  postgres:
+    db_name: "postgres"
+    user: "postgres"
+    password: "postgres"
+  
+  cloudbeaver:
+    db_name: "cloudbeaver"
+    admin_user: "admin"
+    admin_password: "admin"

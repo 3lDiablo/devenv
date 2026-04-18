@@ -1,0 +1,12 @@
+# Kustomize Custom Configuration for Kafka
+varReference:
+- kind: Kafka
+  path: spec/kafka/version
+- kind: Kafka
+  path: spec/kafka/metadataVersion
+- kind: Kafka
+  path: spec/kafka/listeners/configuration/bootstrap/nodePort
+- kind: KafkaNodePool
+  path: spec/replicas
+- kind: Kafka
+  path: spec/kafka/config/num.partitions

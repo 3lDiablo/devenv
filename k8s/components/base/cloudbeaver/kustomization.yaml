@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The 'labels' section was removed as it was part of a previous, incorrect fix.
+# The base should be as simple as possible.
+
+resources:
+- deployment.yaml
+- service.yaml

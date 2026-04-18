@@ -1,0 +1,9 @@
+# Prometheus-style metrics config for Strimzi
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-metrics
+  namespace: infrastructure
+data:
+  kafka-metrics-config.yml: |
+    # Your metrics config here

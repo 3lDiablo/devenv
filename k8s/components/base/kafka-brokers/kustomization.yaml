@@ -1,0 +1,11 @@
+# Base: Kafka Brokers
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+- pairs:
+    component: kafka-nodepool
+  includeSelectors: false
+
+resources:
+  - nodepool-broker.yaml

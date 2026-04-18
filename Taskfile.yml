@@ -1,0 +1,257 @@
+# ⚡ Orchestration Taskfile (Pure Data Pipeline)
+# ---------------------------------------------
+version: '3'
+
+silent: true
+
+vars:
+  CLUSTER_NAME: { sh: "yq eval '.cluster.name' config.yaml" }
+  PROVIDER: { sh: "yq eval '.cluster.provider' config.yaml" }
+  KAFKA_NAME: { sh: "yq eval '.settings.kafka.cluster_name' config.yaml" }
+  CONTEXT: "kind-{{.CLUSTER_NAME}}"
+
+env:
+  KIND_EXPERIMENTAL_PROVIDER: "{{.PROVIDER}}"
+
+tasks:
+  default:
+    cmds:
+      - task: --list
+
+  # --- PRIMARY PIPELINE ---
+
+  up:
+    desc: "Initialize the full environment from scratch."
+    cmds:
+      - task: check-deps
+      - task: render
+      - task: cluster-create
+      - task: load-images
+      - task: init-namespace
+      - task: deploy-all
+
+  down:
+    desc: "Nuclear Reset: Deletes cluster, persistent data volumes, and network."
+    cmds:
+      - |
+        echo "🔥 Deleting cluster {{.CLUSTER_NAME}}..."
+        kind delete cluster --name "{{.CLUSTER_NAME}}"
+      - |
+        echo "🧹 Performing hard cleanup (this does NOT delete images)..."
+        echo "🧹 Pruning unused data volumes..."
+        {{.PROVIDER}} volume prune -f >/dev/null 2>&1 || true
+        echo "🧹 Removing Kind network..."
+        {{.PROVIDER}} network rm kind >/dev/null 2>&1 || true
+      - rm -f k8s/cluster/kind.yaml k8s/components/overlays/local/values.yaml k8s/components/overlays/local/data-sources.json k8s/components/overlays/local/cloudbeaver.conf k8s/components/overlays/local/initial-data.conf
+
+  # --- PERSISTENCE LIFECYCLE ---
+
+  stop:
+    desc: "Pause the environment."
+    cmds:
+      - |
+        echo "⏸️  Stopping cluster nodes..."
+        {{.PROVIDER}} stop {{.CLUSTER_NAME}}-control-plane
+      - echo "✅ Cluster paused. Run 'task start' to resume."
+
+  start:
+    desc: "Resume a paused environment, or create it if it doesn't exist."
+    cmds:
+      - |
+        if ! kind get clusters | grep -q "^{{.CLUSTER_NAME}}$"; then
+          echo "Cluster not found. Running 'task up' instead..."
+          task up
+        else
+          echo "▶️  Starting cluster nodes..."
+          {{.PROVIDER}} start {{.CLUSTER_NAME}}-control-plane
+          echo "⏳ Waiting for Kubernetes API to be ready..."
+          kubectl wait --for=condition=Ready nodes --all --timeout=60s --context {{.CONTEXT}}
+          echo "🚀 Cluster resumed and ready."
+        fi
+
+  # --- STAGE 1: DATA RENDERING (The Bridge) ---
+
+  render:
+    desc: "Render all templates using config.yaml as the Source of Truth."
+    cmds:
+      - task: render-kind-config
+      - task: render-values
+      - task: render-cloudbeaver-conf
+
+  render-kind-config:
+    internal: true
+    cmds:
+      - |
+        yq eval-all '
+          select(fileIndex == 0) as $base |
+          select(fileIndex == 1) as $cfg |
+          $base |
+          .nodes[0].image = $cfg.cluster.node_image |
+          .nodes[0].extraPortMappings = ($cfg.cluster.ports | map({
+            "containerPort": .node,
+            "hostPort": .host,
+            "protocol": "TCP"
+          }))
+        ' k8s/cluster/kind-config.base.yaml config.yaml > k8s/cluster/kind.yaml
+
+  render-values:
+    internal: true
+    cmds:
+      - |
+        # Generate a flat ConfigMap from config.yaml for Kustomize Replacements
+        echo "apiVersion: v1" > k8s/components/overlays/local/values.yaml
+        echo "kind: ConfigMap" >> k8s/components/overlays/local/values.yaml
+        echo "metadata:" >> k8s/components/overlays/local/values.yaml
+        echo "  name: global-values" >> k8s/components/overlays/local/values.yaml
+        echo "  namespace: infrastructure" >> k8s/components/overlays/local/values.yaml
+        echo "data:" >> k8s/components/overlays/local/values.yaml
+        # Flat values
+        yq eval '.. | select(tag == "!!str" or tag == "!!int" or tag == "!!bool") | "  " + (path | join("_")) + ": \"" + . + "\""' config.yaml >> k8s/components/overlays/local/values.yaml
+        # Full image strings
+        yq eval '.images | to_entries | .[] | "  images_" + .key + "_full: \"" + .value.registry + (select(.value.repository) | "/" + .value.repository) + ":" + .value.tag + "\""' config.yaml >> k8s/components/overlays/local/values.yaml
+
+  render-cloudbeaver-conf:
+    internal: true
+    cmds:
+      - |
+        PG_USER=$(yq e '.settings.postgres.user' config.yaml)
+        PG_PASS=$(yq e '.settings.postgres.password' config.yaml)
+
+        # Render data-sources.json
+        yq e ".connections.\"postgres-local\".configuration.user = \"$PG_USER\" | .connections.\"postgres-local\".configuration.password = \"$PG_PASS\"" \
+               k8s/components/base/cloudbeaver/data-sources.json.tpl > k8s/components/overlays/local/data-sources.json
+
+        # Render cloudbeaver.conf
+        yq e ".server.database.url = \"jdbc:postgresql://postgres:5432/$(yq e '.settings.cloudbeaver.db_name' config.yaml)\" | .server.database.user = \"$PG_USER\" | .server.database.password = \"$PG_PASS\"" \
+               k8s/components/base/cloudbeaver/cloudbeaver.conf.tpl > k8s/components/overlays/local/cloudbeaver.conf
+
+        # Render initial-data.conf
+        yq e '.' k8s/components/base/cloudbeaver/initial-data.conf.tpl > k8s/components/overlays/local/initial-data.conf
+
+  # --- STAGE 2: CLUSTER LIFECYCLE ---
+
+  cluster-create:
+    cmds:
+      - kind create cluster --name "{{.CLUSTER_NAME}}" --config k8s/cluster/kind.yaml
+    status:
+      - |
+        kind get clusters | grep -q "^{{.CLUSTER_NAME}}$" && 
+        kubectl cluster-info --context {{.CONTEXT}} >/dev/null 2>&1
+
+  load-images:
+    cmds:
+      - |
+        IMAGES=$(yq eval '.images | .. | select(has("repository")) | .registry + "/" + .repository + ":" + .tag' config.yaml | sort | uniq)
+        for img in $IMAGES; do
+          # First, check if image is already in the cluster.
+          if ! {{.PROVIDER}} exec {{.CLUSTER_NAME}}-control-plane crictl images | grep -q "${img%%:*}" >/dev/null 2>&1; then
+            echo "🚚 Image $img not in cluster. Checking host..."
+            # If not in cluster, ensure it's on the host. Pull if missing.
+            {{.PROVIDER}} image inspect "$img" >/dev/null 2>&1 || {{.PROVIDER}} pull --tls-verify=false "$img"
+            
+            # Save the image to a tarball and load it into the cluster.
+            # This is more robust than 'kind load docker-image' with podman.
+            echo "📦 Archiving $img to a temporary file..."
+            {{.PROVIDER}} save "$img" -o /tmp/kind_load_image.tar
+            echo "📦 Loading archive into cluster {{.CLUSTER_NAME}}..."
+            kind load image-archive /tmp/kind_load_image.tar --name "{{.CLUSTER_NAME}}"
+            rm /tmp/kind_load_image.tar
+          else
+            echo "✅ Image $img already loaded in cluster"
+          fi
+        done
+
+  # --- STAGE 3: MODULAR DEPLOYMENT ---
+
+  deploy-all:
+    desc: "Parallelized deployment of modular overlays."
+    deps:
+      - deploy-postgres
+      - deploy-strimzi
+      - deploy-cloudbeaver
+      - deploy-kafka-nodepools
+      - deploy-kafka-cluster
+      - deploy-schema-registry
+      - deploy-kafka-connect
+      - deploy-redpanda
+
+  deploy-strimzi:
+    run: once
+    cmds:
+      - echo "🏗️  Deploying Strimzi Operator..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "strimzi")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - kubectl wait deployment/strimzi-cluster-operator -n infrastructure --for=condition=Available --timeout=60s --context "{{.CONTEXT}}"
+      - |
+        echo "⏳ Waiting for Strimzi CRDs..."
+        kubectl wait --for=condition=Established crd/kafkas.kafka.strimzi.io --timeout=60s --context "{{.CONTEXT}}"
+        kubectl wait --for=condition=Established crd/kafkanodepools.kafka.strimzi.io --timeout=60s --context "{{.CONTEXT}}"
+        kubectl wait --for=condition=Established crd/kafkaconnects.kafka.strimzi.io --timeout=60s --context "{{.CONTEXT}}"
+
+  deploy-postgres:
+    run: once
+    cmds:
+      - echo "🏗️  Deploying Postgres Database..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "postgres")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - kubectl wait deployment/postgres -n infrastructure --for=condition=Available --timeout=120s --context "{{.CONTEXT}}"
+
+  deploy-cloudbeaver:
+    run: once
+    deps: [deploy-postgres]
+    cmds:
+      - echo "🏗️  Deploying CloudBeaver..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "cloudbeaver")' | kubectl apply -f - --context "{{.CONTEXT}}"
+
+  deploy-kafka-nodepools:
+    run: once
+    deps: [deploy-strimzi]
+    cmds:
+      - echo "🏗️  Deploying Kafka NodePools..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-nodepool")' | kubectl apply -f - --context "{{.CONTEXT}}"
+
+  deploy-kafka-cluster:
+    run: once
+    deps: [deploy-kafka-nodepools]
+    cmds:
+      - echo "🏗️  Deploying Kafka Cluster..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-cluster")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - kubectl wait kafka/{{.KAFKA_NAME}} -n infrastructure --for=condition=Ready --timeout=300s --context "{{.CONTEXT}}"
+
+  deploy-schema-registry:
+    run: once
+    deps: [deploy-kafka-cluster]
+    cmds:
+      - echo "🏗️  Deploying Schema Registry..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "schema-registry")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - kubectl wait deployment/schema-registry -n infrastructure --for=condition=Available --timeout=120s --context "{{.CONTEXT}}"
+
+  deploy-kafka-connect:
+    run: once
+    deps: [deploy-kafka-cluster, deploy-schema-registry]
+    cmds:
+      - echo "🏗️  Deploying Kafka Connect..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-connect")' | kubectl apply -f - --context "{{.CONTEXT}}"
+
+  deploy-redpanda:
+    run: once
+    deps: [deploy-schema-registry, deploy-kafka-connect]
+    cmds:
+      - echo "🏗️  Deploying Redpanda Console..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "redpanda")' | kubectl apply -f - --context "{{.CONTEXT}}"
+
+  # --- UTILITIES ---
+
+  status:
+    desc: "Check health of all pods."
+    cmds:
+      - kubectl get pods -n infrastructure --context "{{.CONTEXT}}"
+
+  init-namespace:
+    cmds:
+      - kubectl create namespace infrastructure --context {{.CONTEXT}} --dry-run=client -o yaml | kubectl apply -f - --context "{{.CONTEXT}}"
+
+  check-deps:
+    cmds:
+      - |
+        for tool in kind kubectl yq kustomize; do
+          command -v $tool >/dev/null 2>&1 || (echo "❌ Missing $tool"; exit 1)
+        done

@@ -1,0 +1,16 @@
+# CloudBeaver Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudbeaver
+  namespace: infrastructure
+  labels:
+    component: cloudbeaver
+spec:
+  type: NodePort
+  ports:
+  - port: 8978
+    targetPort: 8978
+    nodePort: 30978
+  selector:
+    app: cloudbeaver

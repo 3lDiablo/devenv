@@ -1,0 +1,13 @@
+# Base: Kafka Cluster
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+- pairs:
+    component: kafka-cluster
+  includeSelectors: false
+
+resources:
+  - kafka-cluster.yaml
+  - metrics-config.yaml
+  - network-policy.yaml

@@ -1,0 +1,7 @@
+# Kustomize Custom Configuration
+# This tells kustomize where it's allowed to inject variables.
+varReference:
+  - kind: Deployment
+    path: spec/template/spec/containers/env/value
+  - kind: Service
+    path: spec/ports/nodePort
