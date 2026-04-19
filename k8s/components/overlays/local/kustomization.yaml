@@ -45,6 +45,12 @@ configMapGenerator:
   options:
     labels:
       component: cloudbeaver
+- name: redpanda-console-config
+  files:
+  - config.yaml=redpanda-console-config.yaml
+  options:
+    labels:
+      component: redpanda
 
 patches:
 - patch: |-
@@ -288,6 +294,60 @@ replacements:
     select:
       kind: Service
       name: cloudbeaver
+
+  # ----- RedPanda Console -----
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.cluster_ports_4_node
+  targets:
+    - select:
+        kind: Service
+        name: redpanda-console
+      fieldPaths:
+        - spec.ports.0.nodePort
+
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_port
+  targets:
+    - select:
+        kind: Kafka
+        name: kafka-cluster
+      fieldPaths:
+        - spec.kafka.listeners.0.port
+    - select:
+        kind: KafkaConnect
+        name: kafka-connect
+      fieldPaths:
+        - spec.bootstrapServers
+      options:
+        delimiter: ":"
+        index: 1
+
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_schema_registry_port
+  targets:
+    - select:
+        kind: Service
+        name: schema-registry
+      fieldPaths:
+        - spec.ports.0.port
+
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_connect_port
+  targets:
+    - select:
+        kind: Service
+        name: kafka-connect-api
+      fieldPaths:
+        - spec.ports.0.port
+
 # --- Images ---
 - source:
     fieldPath: data.images_postgres_full
@@ -329,3 +389,88 @@ replacements:
     select:
       kind: Deployment
       name: redpanda-console
+# --- Port Unification: Postgres ---
+- source:
+    fieldPath: data.settings_postgres_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.ports.0.containerPort
+    select:
+      kind: Deployment
+      name: postgres
+  - fieldPaths:
+    - spec.ports.0.port
+    select:
+      kind: Service
+      name: postgres
+  - fieldPaths:
+    - spec.ports.0.targetPort
+    select:
+      kind: Service
+      name: postgres
+# --- Port Unification: Schema Registry ---
+- source:
+    fieldPath: data.settings_schema_registry_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.ports.0.port
+    select:
+      kind: Service
+      name: schema-registry
+# --- Port Unification: Kafka Connect ---
+- source:
+    fieldPath: data.settings_kafka_connect_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.ports.0.port
+    select:
+      kind: Service
+      name: kafka-connect-api
+# --- Port Unification: Redpanda Console ---
+- source:
+    fieldPath: data.settings_redpanda_console_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.ports.0.containerPort
+    select:
+      kind: Deployment
+      name: redpanda-console
+  - fieldPaths:
+    - spec.ports.0.port
+    select:
+      kind: Service
+      name: redpanda-console
+  - fieldPaths:
+    - spec.ports.0.targetPort
+    select:
+      kind: Service
+      name: redpanda-console
+# --- Port Unification: Cloudbeaver ---
+- source:
+    fieldPath: data.settings_cloudbeaver_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.ports.0.containerPort
+    select:
+      kind: Deployment
+      name: cloudbeaver
+  - fieldPaths:
+    - spec.ports.0.port
+    select:
+      kind: Service
+      name: cloudbeaver
+  - fieldPaths:
+    - spec.ports.0.targetPort
+    select:
+      kind: Service
+      name: cloudbeaver

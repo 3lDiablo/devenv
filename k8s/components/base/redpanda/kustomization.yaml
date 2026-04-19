@@ -9,4 +9,3 @@ labels:
 resources:
 - deployment.yaml
 - service.yaml
-- console-config.yaml

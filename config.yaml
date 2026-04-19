@@ -1,27 +1,58 @@
 # ⚡ Centralized Project Configuration
 # ---------------------------------
+settings:
+  kafka:
+    cluster_name: "kafka-cluster"
+    version: "4.2.0"
+    metadata_version: "4.2-IV0"
+    broker_replicas: 1
+    controller_replicas: 1
+    default_partitions: 6
+    port: &kafka_broker_port 9092
+
+  postgres:
+    db_name: "postgres"
+    user: "postgres"
+    password: "postgres"
+    port: &postgres_port 5432
+
+  schema_registry:
+    port: &sr_port 8081
+
+  kafka_connect:
+    port: &kc_port 8083
+
+  redpanda_console:
+    port: &rp_port 8080
+
+  cloudbeaver:
+    db_name: "cloudbeaver"
+    admin_user: "admin"
+    admin_password: "admin"
+    port: &cb_port 8978
+
 cluster:
   name: "dev-cluster"
   provider: "podman"
   node_image: "kindest/node:v1.31.0"
   ports:
     - name: kafka-broker
-      host: 9092
+      host: *kafka_broker_port
       node: 30092
     - name: postgres
-      host: 5432
+      host: *postgres_port
       node: 30432
     - name: schema-registry
-      host: 8081
+      host: *sr_port
       node: 30081
     - name: kafka-connect
-      host: 8083
+      host: *kc_port
       node: 30083
     - name: redpanda-console
-      host: 8080
+      host: *rp_port
       node: 30080
     - name: cloudbeaver
-      host: 8978
+      host: *cb_port
       node: 30978
 
 images:
@@ -48,22 +79,3 @@ images:
     registry: docker.io
     repository: dbeaver/cloudbeaver
     tag: "26.0.2"
-
-settings:
-  kafka:
-    cluster_name: "kafka-cluster"
-    version: "4.2.0"
-    metadata_version: "4.2-IV0"
-    broker_replicas: 1
-    controller_replicas: 1
-    default_partitions: 6
-  
-  postgres:
-    db_name: "postgres"
-    user: "postgres"
-    password: "postgres"
-  
-  cloudbeaver:
-    db_name: "cloudbeaver"
-    admin_user: "admin"
-    admin_password: "admin"
