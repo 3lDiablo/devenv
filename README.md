@@ -1,112 +1,63 @@
-# ⚡ Local Development Environment
+# Local Development Environment
 
-A professional-grade, lightweight, and developer-centric local development environment based on a single-node **Kubernetes (Kind)** cluster.
+A professional-grade, lightweight, and declarative local development environment based on a single-node **Kubernetes (Kind)** cluster.
 
-This project uses the **Pure Dynamic Bridge** architecture: a single source of truth (`config.yaml`) drives the entire stack with zero intermediate environment files.
-
----
-
-## 🛠️ Prerequisites
-
-The following tools must be installed and available in your PATH before initialization:
-
-- **[Taskfile](https://taskfile.dev/installation/)**: CLI orchestrator and task runner.
-- **[Kind](https://kind.sigs.k8s.io/)**: Local Kubernetes cluster engine.
-- **[yq](https://github.com/mikefarah/yq)**: Command-line YAML processor (v4+).
-- **[Kustomize](https://kustomize.io/)**: Standalone Kubernetes manifest builder (v4+).
-- **[kubectl](https://kubernetes.io/docs/tasks/tools/)**: Kubernetes command-line interface.
-- **[Docker](https://www.docker.com/)** or **[Podman](https://podman.io/)**: Container runtime engine.
+This project provides a reproducible, **production-like** foundation for engineers, starting with a core stack of Kafka and PostgreSQL, but designed for easy expansion. It is managed by a simple, unified command-line interface.
 
 ---
 
-## 🚀 Quick Start
+## Features
 
-Initialize the complete infrastructure stack:
+- **Declarative Architecture**: The entire environment is defined by a single `config.yaml` file. All configuration for the cluster, components, and services is derived from this single source of truth.
+- **Production-Like Kafka**: High-fidelity Kafka setup using the Strimzi operator in KRaft mode, with separated Controller and Broker NodePools.
+- **Native Localhost Access**: All primary services are exposed on `localhost` via Kubernetes NodePorts, eliminating the friction of `kubectl port-forward`.
+- **Persistent Data**: All stateful services (like PostgreSQL and Kafka) are backed by persistent volumes, ensuring data survives cluster restarts.
+- **Extensible & Modular**: New components can be easily added to the Kustomize base, and the build system will automatically incorporate them.
 
-```bash
-task up
-```
+## Core Components
 
-Teardown and clean up the environment:
+The environment currently provisions the following services:
 
-```bash
-task down
-```
+- **Streaming**: [Strimzi](https://strimzi.io/)-managed Apache Kafka
+- **Database**: PostgreSQL
+- **Kafka Management UI**: Redpanda Console
+- **Database UI**: Cloudbeaver
 
-View all available orchestration commands:
+## Architecture
 
-```bash
-task --list
-```
+This project follows a "Declarative Architecture" where `config.yaml` is the single source of truth. An orchestration layer using `Taskfile` and `yq` renders this configuration into manifests that are then applied to the cluster using `kustomize`.
 
----
+## Prerequisites
 
-## 🧐 Technical Stack Rationale
+You must have the following CLI tools installed on your system:
+- `docker` or `podman`
+- `kubectl`
+- `kind`
+- `task`
+- `yq`
 
-This environment is built on a specific set of architectural choices designed for stability, transparency, and high developer velocity.
+You can run `task check-deps` to verify your setup.
 
-### Why KRaft over Zookeeper?
-We exclusively use **Kafka in KRaft mode** via the Strimzi Operator. 
-- **Production Standard**: As of Kafka 3.x, KRaft is the production-ready consensus protocol. It is the future standard, and developing against it ensures your local environment mirrors modern cloud deployments.
-- **Unified Metadata**: Eliminating Zookeeper removes a massive layer of complexity. Metadata is now managed within Kafka itself, leading to faster leader election and improved cluster stability.
-- **Resource Efficiency**: Removing the Zookeeper ensemble saves significant CPU and RAM, keeping the environment lightweight.
+## Quick Start
 
-### Why Classic Manifests over Helm?
-For the core stack (Postgres, Redpanda Console, Schema Registry), we use raw Kubernetes manifests instead of 3rd-party Helm charts for several critical reasons:
-1.  **Lightweight & Transparent**: These are single-container applications. Manifests provide exactly what is needed without the "hidden" defaults and bloat of large Helm charts.
-2.  **Native NodePort Integration**: Our strict mandate for direct localhost access requires deterministic NodePort mapping. Custom manifests ensure the `nodePort` matches our `config.yaml` perfectly.
-3.  **Clean Variable Injection**: Our **Pure Dynamic Bridge** (Kustomize `replacements`) is most reliable when targeting raw YAML structures. Injecting variables into complex Helm charts often requires "hacked" workarounds.
-4.  **Bitnami Avoidance**: Due to the 2025 Bitnami registry shifts, their public charts are less reliable for simple, version-fixed local reproducibility. Using official library images in clean manifests is significantly safer.
+1.  **Review Configuration**: Open `config.yaml` and adjust any settings as needed (e.g., change the container provider from `docker` to `podman`, or adjust `host` ports if they conflict with other local services).
+2.  **Start Environment**:
+    ```bash
+    task up
+    ```
+3.  **Wait**: The initial setup will take a few minutes as images are loaded and components are deployed and initialized.
+4.  **Access Services**: Once complete, services will be available on `localhost` at the ports defined in `config.yaml`.
 
----
+## Commands
 
-## 🍎 Important for Podman (macOS) Users
+All project tasks are run via `Taskfile`. Run `task --list` for a full menu of available commands.
 
-On macOS, Podman runs inside a lightweight Linux Virtual Machine. This VM manages its own certificate store, which may not automatically trust certain Certificate Authorities (CAs) even if your host machine does. This can result in `x509: certificate signed by unknown authority` errors during image pulls.
+- `task up`: Creates and starts the environment from scratch.
+- `task down`: Destroys the entire environment, including persistent data.
+- `task stop`: Pauses the environment by stopping the cluster containers.
+- `task start`: Resumes a paused environment.
+- `task status`: Checks the status of all pods in the cluster.
 
-### Automated Workaround
-The orchestration in this project automatically handles this by:
-1.  Using the `--tls-verify=false` flag during the `podman pull` phase on the host.
-2.  Pre-loading images directly into the Kind cluster's internal storage via `kind load image-archive`.
+## Configuration
 
-This ensures a seamless setup even in restrictive network environments. If you need to pull images manually, ensure you include the TLS bypass flag:
-```bash
-podman pull --tls-verify=false <image>:<tag>
-```
-
----
-
-## 🛡️ Developer Experience (DevEx)
-
-- **Kubecontext Safety**: All operations are explicitly scoped to the local Kind cluster (`kind-<cluster-name>`) to prevent accidental configuration of external environments.
-- **Graceful Error Handling**: Status-aware task execution and dependency verification ensure a deterministic setup process.
-- **Deterministic Orchestration**: Intelligent health-check logic ensures Kafka brokers are fully ready before deploying dependent services.
-- **Pure Dynamic Bridge**: One file (`config.yaml`) controls everything. Taskfile and Kustomize extract values dynamically, ensuring a clean and traceable configuration.
-
----
-
-## ⌨️ CLI Orchestration (Taskfile)
-
-We use [Taskfile](https://taskfile.dev/) to provide a standardized interface:
-
-| Command | Rationale |
-| :--- | :--- |
-| `task up` | Executes the full lifecycle: dependency check, cluster creation, operator installation, and stack deployment. |
-| `task down` | Performs a graceful teardown of the Kind cluster and removes all generated local manifests. |
-| `task status` | Aggregates the health status of infrastructure pods and provides active NodePort endpoints. |
-| `task --list` | Enumerates all granular tasks available for advanced environment control. |
-
----
-
-## ⚙️ Configuration
-
-The **`config.yaml`** file acts as the central control plane for:
-- Cluster identifiers and container runtime selection (Docker/Podman).
-- Image registry management (supporting Bitnami Legacy migrations).
-- Localhost port definitions and Kafka topology (replicas/storage).
-
----
-
-## 📄 License
-
-This project is open-source and released under the [MIT License](LICENSE).
+The `config.yaml` file is the **single source of truth** for the entire environment. The version committed to the repository serves as the base configuration and working example. All values, including image versions, resource settings, and ports, should be managed from this file.

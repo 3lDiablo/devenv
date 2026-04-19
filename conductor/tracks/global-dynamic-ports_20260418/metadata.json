@@ -1,0 +1,8 @@
+{
+    "track_id": "global-dynamic-ports_20260418",
+    "type": "refactor",
+    "status": "new",
+    "created_at": "2026-04-18T12:00:00Z",
+    "updated_at": "2026-04-18T12:00:00Z",
+    "description": "extend dynamic ports to all components"
+}
