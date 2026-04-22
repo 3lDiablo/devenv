@@ -14,7 +14,7 @@ devenv.iml
 /k8s/components/overlays/local/data-sources.json
 /k8s/components/overlays/local/cloudbeaver.conf
 /k8s/components/overlays/local/initial-data.conf
-# The init-db.sql is source code for the overlay, so it is NOT ignored.
+/k8s/components/overlays/local/redpanda-console-config.yaml
 
 # === Build Artifacts ===
 # Temporary file created by the 'load-images' task
