@@ -1,0 +1,11 @@
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: init-db-volume
+    configMap:
+      name: postgres-init-scripts
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    name: init-db-volume
+    mountPath: /docker-entrypoint-initdb.d

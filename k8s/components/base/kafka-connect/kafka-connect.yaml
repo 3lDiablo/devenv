@@ -10,6 +10,16 @@ metadata:
 spec:
   version: 3.7.0
   replicas: 1
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+  jvmOptions:
+    -Xms: "128m"
+    -Xmx: "128m"
   bootstrapServers: kafka-cluster-kafka-bootstrap:9092
   groupId: connect-cluster
   configStorageTopic: connect-cluster-configs

@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karapace
+  namespace: infrastructure
+  labels:
+    component: karapace
+spec:
+  # KARAPACE UNIFIED: Provides both a Confluent-compatible REST API and a Schema Registry.
+  # This deployment runs Karapace in a unified mode, configured via a single JSON file.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: karapace
+  template:
+    metadata:
+      labels:
+        app: karapace
+        component: karapace
+    spec:
+      containers:
+      - name: karapace
+        image: ghcr.io/aiven/karapace:3.7.1
+        # Use direct module call to load our mounted config files.
+        command: ["python3", "-m", "karapace.karapace_all", "/opt/karapace/etc/karapace.config.json"]
+        ports:
+        - containerPort: 8082
+          name: rest
+        volumeMounts:
+        - name: config-volume
+          mountPath: /opt/karapace/etc/karapace.config.json
+          subPath: karapace.config.json
+        - name: rest-config-volume
+          mountPath: /opt/karapace/etc/rest-proxy-karapace.config.json
+          subPath: rest-proxy-karapace.config.json
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "100m"
+            memory: "256Mi"
+        # Readiness probe checks if the REST API is ready to accept traffic.
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8082
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        # Liveness probe checks if the Karapace process is still running and responsive.
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8082
+          initialDelaySeconds: 15
+          periodSeconds: 20
+      volumes:
+      - name: config-volume
+        configMap:
+          name: karapace-config
+      - name: rest-config-volume
+        configMap:
+          name: karapace-rest-config

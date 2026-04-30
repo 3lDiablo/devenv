@@ -1,41 +1,120 @@
 # ⚡ Centralized Project Configuration
 # ---------------------------------
+# This file is the "Single Source of Truth" for the entire environment.
+# All downstream manifests (Kind, Kustomize, UI configs) are generated from here.
+
 settings:
+  # KAFKA (Strimzi): We use Strimzi for its mature operator pattern and KRaft support.
   kafka:
     cluster_name: "kafka-cluster"
     version: "4.2.0"
-    metadata_version: "4.2-IV0"
+    metadata_version: "4.2-IV0" # KRaft metadata version
     broker_replicas: 1
     controller_replicas: 1
     default_partitions: 6
     port: &kafka_broker_port 9092
+    resources:
+      cpu:
+        request: "100m"
+        limit: "1"
+      memory:
+        request: "512Mi"
+        limit: "768Mi" # Managed by Taskfile JVM auto-sizing (70% of limit)
 
+  # STRIMZI ENTITY OPERATOR: Manages KafkaTopics and KafkaUsers CRDs.
+  entity_operator:
+    resources:
+      cpu:
+        request: "100m"
+        limit: "500m"
+      memory:
+        request: "256Mi"
+        limit: "512Mi"
+
+  # POSTGRES: Used as the storage backend for Apicurio Registry.
   postgres:
     db_name: "postgres"
     user: "postgres"
     password: "postgres"
     port: &postgres_port 5432
+    resources:
+      cpu:
+        request: "100m"
+        limit: "500m"
+      memory:
+        request: "256Mi"
+        limit: "512Mi"
 
+  # APICURIO REGISTRY: Chosen for its lightness, SQL backend (Postgres), 
+  # and Confluent-compatible REST API.
   schema_registry:
     port: &sr_port 8081
+    resources:
+      cpu:
+        request: "100m"
+        limit: "500m"
+      memory:
+        request: "256Mi"
+        limit: "384Mi"
 
+  # KAFKA CONNECT: Modular framework for connecting Kafka with external systems.
   kafka_connect:
     port: &kc_port 8083
+    resources:
+      cpu:
+        request: "100m"
+        limit: "1"
+      memory:
+        request: "512Mi"
+        limit: "768Mi"
 
+  # REDPANDA CONSOLE: Modern, high-performance UI for Kafka. 
+  # Why not Confluent UI? Redpanda is stateless, lighter, and more intuitive for developers.
   redpanda_console:
     port: &rp_port 8080
+    resources:
+      cpu:
+        request: "50m"
+        limit: "200m"
+      memory:
+        request: "64Mi"
+        limit: "128Mi"
 
+  # KARAPACE REST PROXY: Provides a REST API for Kafka. 
+  # Why Karapace? It supports schema-aware event publishing, filling the gap in Strimzi Bridge.
+  karapace_rest:
+    port: &karapace_port 8082
+    resources:
+      cpu:
+        request: "100m"
+        limit: "500m"
+      memory:
+        request: "256Mi"
+        limit: "512Mi"
+
+  # CLOUDBEAVER: Web-based DB manager. 
+  # Why not pgAdmin? Cloudbeaver is more lightweight and has a cleaner UI for quick dev tasks.
   cloudbeaver:
     db_name: "cloudbeaver"
     admin_user: "admin"
     admin_password: "admin"
     port: &cb_port 8978
+    resources:
+      cpu:
+        request: "100m"
+        limit: "500m"
+      memory:
+        request: "256Mi"
+        limit: "512Mi"
 
 cluster:
   name: "dev-cluster"
-  provider: "podman"
+  provider: "docker" # Supports 'docker' or 'podman'
   node_image: "kindest/node:v1.31.0"
+  api_server_address: "127.0.0.1"
+  api_server_port: 6443
   ports:
+    # Port Mappings: maps Host ports to NodePort services inside Kind.
     - name: kafka-broker
       host: *kafka_broker_port
       node: 30092
@@ -51,11 +130,16 @@ cluster:
     - name: redpanda-console
       host: *rp_port
       node: 30080
+    - name: karapace-rest
+      host: *karapace_port
+      node: 30082
     - name: cloudbeaver
       host: *cb_port
       node: 30978
 
 images:
+  # We use official images directly to avoid supply-chain risks associated 
+  # with third-party packagers like Bitnami where possible.
   postgres:
     registry: docker.io
     repository: library/postgres
@@ -71,10 +155,14 @@ images:
   schema_registry:
     registry: quay.io
     repository: apicurio/apicurio-registry-sql
-    tag: "2.5.10.Final"
+    tag: "2.6.13.Final"
   redpanda_console:
     registry: docker.redpanda.com/redpandadata/console
     tag: "v3.7.1"
+  karapace:
+    registry: ghcr.io
+    repository: aiven/karapace
+    tag: "3.7.1"
   cloudbeaver:
     registry: docker.io
     repository: dbeaver/cloudbeaver

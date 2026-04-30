@@ -1,0 +1,11 @@
+# --- Strimzi Replacements ---
+- source:
+    fieldPath: data.images_strimzi_operator_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.image
+    select:
+      kind: Deployment
+      name: strimzi-cluster-operator

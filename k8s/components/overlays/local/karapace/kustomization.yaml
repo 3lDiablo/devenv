@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../../base/karapace
+
+configMapGenerator:
+  - name: karapace-config
+    namespace: infrastructure
+    files:
+      - karapace.config.json
+    options:
+      labels:
+        component: karapace
+  - name: karapace-rest-config
+    namespace: infrastructure
+    files:
+      - rest-proxy-karapace.config.json
+    options:
+      labels:
+        component: karapace

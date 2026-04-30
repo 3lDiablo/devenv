@@ -1,0 +1,45 @@
+- op: add
+  path: /spec/template/spec/initContainers
+  value:
+    - name: wait-for-postgres
+      image: docker.io/library/postgres:17.0-alpine
+      env:
+        - name: PGUSER
+          value: "postgres"
+        - name: PGPASSWORD
+          value: "postgres"
+      command: ['sh', '-c', 'until pg_isready -h postgres -p 5432 -U $(PGUSER) -d cloudbeaver; do echo "Waiting for cloudbeaver database..."; sleep 2; done;']
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value:
+    name: CB_ADMIN_NAME
+    value: "admin"
+- op: add
+  path: /spec/template/spec/containers/0/env/-
+  value:
+    name: CB_ADMIN_PASSWORD
+    value: "admin"
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: server-config-volume
+    configMap:
+      name: cloudbeaver-server-config
+- op: add
+  path: /spec/template/spec/volumes/-
+  value:
+    name: initial-data-volume
+    configMap:
+      name: cloudbeaver-initial-data-config
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    name: server-config-volume
+    mountPath: /opt/cloudbeaver/conf/cloudbeaver.conf
+    subPath: cloudbeaver.conf
+- op: add
+  path: /spec/template/spec/containers/0/volumeMounts/-
+  value:
+    name: initial-data-volume
+    mountPath: /opt/cloudbeaver/conf/initial-data.conf
+    subPath: initial-data.conf

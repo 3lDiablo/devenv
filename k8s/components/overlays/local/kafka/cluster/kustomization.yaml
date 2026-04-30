@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+- includeSelectors: true
+  pairs:
+    component: kafka-cluster
+
+resources:
+  - ../../../../base/kafka/cluster
+
+patches:
+  - path: entity-operator.yaml
+    target: {kind: Kafka, name: kafka-cluster}

@@ -10,3 +10,10 @@ nodes:
   - role: control-plane
     # image: placeholder (injected by yq)
     # extraPortMappings: placeholder (injected by yq)
+
+networking:
+  # Injected by yq from config.yaml
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443
+
+

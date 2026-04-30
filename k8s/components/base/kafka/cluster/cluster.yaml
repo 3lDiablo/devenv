@@ -1,0 +1,41 @@
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: kafka-cluster
+  namespace: infrastructure
+  labels:
+    component: kafka-cluster
+spec:
+  # KAFKA CLUSTER CONFIGURATION
+  # Why Strimzi? It provides a production-grade operator for Kafka.
+  # This manifest defines a KRaft-based cluster (no Zookeeper).
+  kafka:
+    version: 4.2.0
+    metadataVersion: 4.2-IV1
+    listeners:
+      # Internal listener for applications running inside the cluster.
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      # External listener via NodePort for development on the host machine.
+      - name: external
+        port: 9093
+        type: nodeport
+        tls: false
+        configuration:
+          bootstrap:
+            nodePort: 30092
+    config:
+      # Local Dev Optimizations: minimize replication for single-node efficiency.
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+      auto.create.topics.enable: true
+      num.partitions: 6
+  # ENTITY OPERATOR: Automates creation of KafkaTopics and KafkaUsers via K8s CRDs.
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}

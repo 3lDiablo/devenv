@@ -1,0 +1,1 @@
+{"host": "0.0.0.0", "port": 8082, "advertised_hostname": "karapace", "bootstrap_uri": "kafka-cluster-kafka-bootstrap:9092", "registry_host": "schema-registry", "registry_port": 8081, "log_level": "DEBUG", "karapace_rest": true, "karapace_registry": false}

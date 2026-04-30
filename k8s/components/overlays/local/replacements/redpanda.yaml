@@ -1,0 +1,77 @@
+# --- Redpanda Console Replacements ---
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.cluster_ports_4_node
+  targets:
+    - select:
+        kind: Service
+        name: redpanda-console
+      fieldPaths:
+        - spec.ports.0.nodePort
+- source:
+    fieldPath: data.images_redpanda_console_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.image
+    select:
+      kind: Deployment
+      name: redpanda-console
+- source:
+    fieldPath: data.settings_redpanda_console_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.ports.0.containerPort
+    select:
+      kind: Deployment
+      name: redpanda-console
+  - fieldPaths:
+    - spec.ports.0.port
+    select:
+      kind: Service
+      name: redpanda-console
+  - fieldPaths:
+    - spec.ports.0.targetPort
+    select:
+      kind: Service
+      name: redpanda-console
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_redpanda_console_resources_cpu_request
+  targets:
+    - select:
+        kind: Deployment
+        name: redpanda-console
+      fieldPaths: [spec.template.spec.containers.0.resources.requests.cpu]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_redpanda_console_resources_cpu_limit
+  targets:
+    - select:
+        kind: Deployment
+        name: redpanda-console
+      fieldPaths: [spec.template.spec.containers.0.resources.limits.cpu]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_redpanda_console_resources_memory_request
+  targets:
+    - select:
+        kind: Deployment
+        name: redpanda-console
+      fieldPaths: [spec.template.spec.containers.0.resources.requests.memory]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_redpanda_console_resources_memory_limit
+  targets:
+    - select:
+        kind: Deployment
+        name: redpanda-console
+      fieldPaths: [spec.template.spec.containers.0.resources.limits.memory]

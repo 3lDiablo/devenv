@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - clusterrole-namespaced.yaml
+  - rolebinding-namespaced.yaml
+  - clusterrole-global.yaml
+  - clusterrolebinding-global.yaml
+  - clusterrole-leader-election.yaml
+  - rolebinding-leader-election.yaml
+  - clusterrole-watched.yaml
+  - rolebinding-watched.yaml
+  - clusterrole-kafka-broker.yaml
+  - clusterrolebinding-kafka-broker-delegation.yaml
+  - clusterrole-entity-operator.yaml
+  - rolebinding-entity-operator-delegation.yaml
+  - clusterrole-kafka-client.yaml
+  - clusterrolebinding-kafka-client-delegation.yaml
+  - configmap.yaml
+  - crd-kafka.yaml
+  - crd-kafkabridge.yaml
+  - crd-kafkaconnect.yaml
+  - crd-kafkaconnector.yaml
+  - crd-kafkamirrormaker2.yaml
+  - crd-kafkanodepool.yaml
+  - crd-kafkarebalance.yaml
+  - crd-kafkatopic.yaml
+  - crd-kafkauser.yaml
+  - crd-strimzipodset.yaml
+  - deployment.yaml
+  - serviceaccount.yaml

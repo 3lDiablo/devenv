@@ -1,0 +1,7 @@
+{
+    "client_id": "karapace-rest-proxy",
+    "group_id": "karapace-rest-proxy",
+    "consumer_request_timeout_ms": 11000,
+    "producer_acks": 1,
+    "producer_linger_ms": 0
+}

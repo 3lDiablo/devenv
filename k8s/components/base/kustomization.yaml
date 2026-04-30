@@ -10,11 +10,10 @@ resources:
   - strimzi
   - postgres
   - kafka
-  - kafka-controllers
-  - kafka-brokers
   - kafka-connect
   - schema-registry
   - redpanda
+  - karapace-rest
   - cloudbeaver
 
 labels:

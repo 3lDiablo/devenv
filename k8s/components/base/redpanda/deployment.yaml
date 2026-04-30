@@ -28,6 +28,13 @@ spec:
         env:
         - name: CONFIG_FILEPATH
           value: /etc/redpanda/config.yaml
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "64Mi"
+          limits:
+            cpu: "10m"
+            memory: "64Mi"
         volumeMounts:
         - name: redpanda-console-config
           mountPath: /etc/redpanda

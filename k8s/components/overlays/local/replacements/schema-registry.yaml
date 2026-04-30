@@ -1,0 +1,109 @@
+# --- Schema Registry Replacements ---
+- source:
+    fieldPath: data.settings_postgres_db_name
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.0.value
+    options:
+      delimiter: /
+      index: 3
+    select:
+      kind: Deployment
+      name: schema-registry
+- source:
+    fieldPath: data.settings_postgres_user
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.1.value
+    select:
+      kind: Deployment
+      name: schema-registry
+- source:
+    fieldPath: data.settings_postgres_password
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.env.2.value
+    select:
+      kind: Deployment
+      name: schema-registry
+- source:
+    fieldPath: data.cluster_ports_2_node
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.ports.0.nodePort
+    select:
+      kind: Service
+      name: schema-registry
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_schema_registry_port
+  targets:
+    - select:
+        kind: Service
+        name: schema-registry
+      fieldPaths:
+        - spec.ports.0.port
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_schema_registry_resources_cpu_request
+  targets:
+    - select:
+        kind: Deployment
+        name: schema-registry
+      fieldPaths: [spec.template.spec.containers.0.resources.requests.cpu]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_schema_registry_resources_cpu_limit
+  targets:
+    - select:
+        kind: Deployment
+        name: schema-registry
+      fieldPaths: [spec.template.spec.containers.0.resources.limits.cpu]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_schema_registry_resources_memory_request
+  targets:
+    - select:
+        kind: Deployment
+        name: schema-registry
+      fieldPaths: [spec.template.spec.containers.0.resources.requests.memory]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_schema_registry_resources_memory_limit
+  targets:
+    - select:
+        kind: Deployment
+        name: schema-registry
+      fieldPaths: [spec.template.spec.containers.0.resources.limits.memory]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_schema_registry_java_options
+  targets:
+    - select:
+        kind: Deployment
+        name: schema-registry
+      fieldPaths: [spec.template.spec.containers.0.env.3.value]
+- source:
+    fieldPath: data.images_schema_registry_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.template.spec.containers.0.image
+    select:
+      kind: Deployment
+      name: schema-registry

@@ -1,0 +1,14 @@
+{
+  "topic_name": "local-card-tokenisation-event-v1",
+  "partitions_count": 2,
+  "config": {
+    "cleanup.policy": "delete",
+    "retention.ms": "-1"
+  },
+  "values": [
+    {
+      "type": "avro",
+      "schema": "CardCreatedEvent"
+    }
+  ]
+}

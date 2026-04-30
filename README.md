@@ -60,4 +60,14 @@ All project tasks are run via `Taskfile`. Run `task --list` for a full menu of a
 
 ## Configuration
 
-The `config.yaml` file is the **single source of truth** for the entire environment. The version committed to the repository serves as the base configuration and working example. All values, including image versions, resource settings, and ports, should be managed from this file.
+### Component Toggles
+You can easily activate or deactivate any service by toggling its `enabled` flag in `config.yaml` (e.g., `enabled: false`). 
+The `Taskfile` orchestration is strictly conditioned around these flags. Disabling a component will prevent its tasks from executing during `task up` and remove it from the runtime generation.
+
+### Port Mapping
+To expose a component perfectly from the Kubernetes virtual network to your native `localhost`, you simply define a `ports` block under the component in `config.yaml` with a `host` port and a `node` port (between 30000-32767).
+The orchestration pipeline will auto-detect the ports recursively, expose them dynamically in the Kind Node container configuration, and patch the respective Kubernetes Services via Kustomize.
+### Resource Management & Auto-Sizing
+To maintain a lightweight local footprint, you must explicitly declare Kubernetes `.resources` (`requests` & `limits`) for all components.
+
+You do **not** need to manually define Java JVM constraints (like `-Xmx`). The Taskfile pipeline automatically detects your defined Kubernetes memory limits and computes an optimized JVM heap boundary internally, capping Java components natively at 70% of the Kubernetes limit. This completely protects your laptop from OOM (Out Of Memory) issues while hiding the complexity of JVM tuning.

@@ -1,0 +1,75 @@
+# --- Kafka Connect Replacements ---
+- source:
+    fieldPath: data.cluster_ports_3_node
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.ports.0.nodePort
+    select:
+      kind: Service
+      name: kafka-connect-api
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_connect_port
+  targets:
+    - select:
+        kind: Service
+        name: kafka-connect-api
+      fieldPaths:
+        - spec.ports.0.port
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_connect_resources_cpu_request
+  targets:
+    - select:
+        kind: KafkaConnect
+        name: kafka-connect
+      fieldPaths: [spec.resources.requests.cpu]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_connect_resources_cpu_limit
+  targets:
+    - select:
+        kind: KafkaConnect
+        name: kafka-connect
+      fieldPaths: [spec.resources.limits.cpu]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_connect_resources_memory_request
+  targets:
+    - select:
+        kind: KafkaConnect
+        name: kafka-connect
+      fieldPaths: [spec.resources.requests.memory]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_connect_resources_memory_limit
+  targets:
+    - select:
+        kind: KafkaConnect
+        name: kafka-connect
+      fieldPaths: [spec.resources.limits.memory]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_connect_jvm_xms
+  targets:
+    - select:
+        kind: KafkaConnect
+        name: kafka-connect
+      fieldPaths: ["spec.jvmOptions.-Xms"]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_kafka_connect_jvm_xmx
+  targets:
+    - select:
+        kind: KafkaConnect
+        name: kafka-connect
+      fieldPaths: ["spec.jvmOptions.-Xmx"]

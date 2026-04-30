@@ -6,6 +6,10 @@ metadata:
   labels:
     component: schema-registry
 spec:
+  # APICURIO REGISTRY: Manages Avro, JSON Schema, and Protobuf definitions.
+  # WHY APICURIO? It is lightweight, Open Source, and uses a standard SQL 
+  # database (Postgres) for storage, avoiding the complexity of Kafka-based storage 
+  # for local development.
   replicas: 1
   selector:
     matchLabels:
@@ -18,17 +22,30 @@ spec:
     spec:
       containers:
       - name: apicurio
-        image: quay.io/apicurio/apicurio-registry-sql:2.5.10.Final
+        image: quay.io/apicurio/apicurio-registry-sql:2.6.x-release
         ports:
         - containerPort: 8080
           name: http
         env:
+        # STORAGE: Connected to the internal Postgres instance.
         - name: QUARKUS_DATASOURCE_JDBC_URL
           value: "jdbc:postgresql://postgres:5432/postgres"
         - name: QUARKUS_DATASOURCE_USERNAME
           value: "postgres"
         - name: QUARKUS_DATASOURCE_PASSWORD
           value: "postgres"
+        # JAVA CONFIG: Memory is auto-sized by Taskfile, but we provide defaults.
+        - name: JAVA_OPTIONS
+          value: "-Xms128m -Xmx128m"
+        - name: REGISTRY_APIS_V2_DATE_FORMAT
+          value: "yyyy-MM-dd'T'HH:mm:ss'Z'"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -38,6 +55,7 @@ metadata:
   labels:
     component: schema-registry
 spec:
+  # EXPOSURE: NodePort 30081 provides Confluent-compatible schema registry API.
   type: NodePort
   ports:
   - port: 8081

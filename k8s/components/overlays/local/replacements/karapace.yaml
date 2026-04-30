@@ -1,0 +1,99 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Replacement
+source:
+  kind: ConfigMap
+  name: global-values
+  fieldPath: data.images_karapace_full
+targets:
+  - select:
+      kind: Deployment
+      name: karapace
+    fieldPaths:
+      - spec.template.spec.containers.0.image
+
+---
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Replacement
+source:
+  kind: ConfigMap
+  name: global-values
+  fieldPath: data.settings_karapace_rest_port
+targets:
+  - select:
+      kind: Service
+      name: rest-proxy
+    fieldPaths:
+      - spec.ports.0.port
+  - select:
+      kind: Deployment
+      name: karapace
+    fieldPaths:
+      - spec.template.spec.containers.0.ports.0.containerPort
+---
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Replacement
+source:
+  kind: ConfigMap
+  name: global-values
+  fieldPath: data.cluster_ports_5_node # karapace-rest
+targets:
+  - select:
+      kind: Service
+      name: rest-proxy
+    fieldPaths:
+      - spec.ports.0.nodePort
+---
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Replacement
+source:
+  kind: ConfigMap
+  name: global-values
+  fieldPath: data.settings_karapace_rest_resources_requests_cpu
+targets:
+  - select:
+      kind: Deployment
+      name: karapace
+    fieldPaths:
+      - spec.template.spec.containers.0.resources.requests.cpu
+
+---
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Replacement
+source:
+  kind: ConfigMap
+  name: global-values
+  fieldPath: data.settings_karapace_rest_resources_requests_memory
+targets:
+  - select:
+      kind: Deployment
+      name: karapace
+    fieldPaths:
+      - spec.template.spec.containers.0.resources.requests.memory
+
+---
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Replacement
+source:
+  kind: ConfigMap
+  name: global-values
+  fieldPath: data.settings_karapace_rest_resources_limits_cpu
+targets:
+  - select:
+      kind: Deployment
+      name: karapace
+    fieldPaths:
+      - spec.template.spec.containers.0.resources.limits.cpu
+
+---
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Replacement
+source:
+  kind: ConfigMap
+  name: global-values
+  fieldPath: data.settings_karapace_rest_resources_limits_memory
+targets:
+  - select:
+      kind: Deployment
+      name: karapace
+    fieldPaths:
+      - spec.template.spec.containers.0.resources.limits.memory
