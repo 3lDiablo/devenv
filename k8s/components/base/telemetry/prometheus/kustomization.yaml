@@ -1,0 +1,40 @@
+# ==============================================================================
+#
+#               Kustomize - Prometheus Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the resources for deploying Prometheus.
+#   It includes the Deployment, Service, and RBAC permissions.
+#
+#   Crucially, it also uses a `configMapGenerator` to create a ConfigMap named
+#   `prometheus-conf` directly from the `prometheus.yml` file. This is the
+#   standard Kustomize way to manage configuration files.
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ------------------------------------------------------------------------------
+# § Component Resources
+# ------------------------------------------------------------------------------
+resources:
+  - deployment.yaml
+  - service.yaml
+  - rbac.yaml # Contains the ServiceAccount, ClusterRole, and ClusterRoleBinding for Prometheus.
+
+# ------------------------------------------------------------------------------
+# § ConfigMap Generator
+#   This generator creates a ConfigMap from a local file.
+# ------------------------------------------------------------------------------
+configMapGenerator:
+  - name: prometheus-conf # The name of the ConfigMap to be created.
+    files:
+      # Use the template as the default source for the base.
+      - prometheus.yml=prometheus.yml.tpl
+    options:
+      # Apply these labels to the generated ConfigMap.
+      labels:
+        component: prometheus

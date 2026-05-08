@@ -1,10 +1,33 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Karapace
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` overlay for the Karapace
+#   component. It is responsible for packaging the rendered configuration
+#   files into ConfigMaps.
+#
+# How It Works:
+#   1.  `resources`: It includes the `base/karapace` component.
+#   2.  `configMapGenerator`: It creates two ConfigMaps from the configuration
+#       files that were rendered by the `Taskfile`.
+#   3.  The base Deployment for Karapace is already configured to look for and
+#       mount volumes named `karapace-config` and `karapace-rest-config`, which
+#       are created here.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
   - ../../../base/karapace
 
+# --- ConfigMap Generators ---
 configMapGenerator:
+  # ConfigMap for the main Karapace configuration.
   - name: karapace-config
     namespace: infrastructure
     files:
@@ -12,6 +35,7 @@ configMapGenerator:
     options:
       labels:
         component: karapace
+  # ConfigMap for the secondary REST proxy configuration.
   - name: karapace-rest-config
     namespace: infrastructure
     files:

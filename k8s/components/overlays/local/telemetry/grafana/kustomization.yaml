@@ -1,0 +1,42 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Grafana
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` overlay for Grafana. It includes
+#   the base manifests and, most importantly, uses a `configMapGenerator` to
+#   package all the dashboard JSON files into a single ConfigMap.
+#
+#   The base Grafana Deployment is configured to mount this ConfigMap, making all
+#   the dashboards automatically available on startup.
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Includes the base manifests for Grafana.
+resources:
+  - ../../../../base/telemetry/grafana
+
+# --- ConfigMap Generator for Dashboards ---
+configMapGenerator:
+  - name: grafana-dashboards # The name of the ConfigMap to create.
+    # The `files` array lists all the dashboard JSON files to be included.
+    # The `render:telemetry` task in the Taskfile downloads and prepares these files.
+    files:
+      - dashboards/strimzi-kafka.json
+      - dashboards/strimzi-kafka-connect.json
+      - dashboards/9628.json   # PostgreSQL Database dashboard
+      - dashboards/13332.json  # Kafka Exporter Overview dashboard
+    options:
+      labels:
+        component: grafana
+  - name: grafana-datasources
+    files:
+      - prometheus.yaml=datasources.yaml
+    options:
+      labels:
+        component: grafana

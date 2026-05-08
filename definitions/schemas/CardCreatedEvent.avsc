@@ -1,10 +1,45 @@
+// ==============================================================================
+//
+//               Avro Schema Definition: CardCreatedEvent
+//
+// ==============================================================================
+//
+// Overview:
+//   This file defines the data contract for a "CardCreatedEvent" using Apache Avro.
+//   Avro is a data serialization system that uses schemas to structure data.
+//   Using Avro with a Schema Registry provides several benefits:
+//
+//   -   Strong Typing: Ensures that producers and consumers agree on the data format.
+//   -   Schema Evolution: Allows for backward and forward compatible changes to the
+//       schema over time without breaking clients.
+//   -   Efficiency: Avro serializes into a compact binary format, which is more
+//       efficient for storage and network transfer than JSON or XML.
+//
+// Usage:
+//   This schema is referenced by `definitions/topics/card-event.json`. The
+//   `provision:kafka` task in the Taskfile reads this file and registers it with
+//   the Apicurio Schema Registry. Producers will then use this schema to serialize
+//   events before sending them to Kafka.
+//
+// ==============================================================================
 {
+  // "type": "record" indicates that this schema defines a complex object with fields.
   "type": "record",
+
+  // "name": The name of the record (similar to a class name).
   "name": "CardCreatedEvent",
+
+  // "namespace": A namespace to qualify the record name, preventing collisions.
+  // This typically follows a reverse-DNS pattern, similar to a package name in Java.
   "namespace": "com.bforbank.token.messaging.model.avro.events",
+
+  // "fields": An array defining the fields within the record.
   "fields": [
     {
+      // "name": The name of the field.
       "name": "cardId",
+      // "type": The data type of the field. Avro supports primitive types
+      // (string, int, long, boolean, etc.) and complex types (record, enum, array, map).
       "type": "string"
     },
     {
@@ -12,6 +47,8 @@
       "type": "string"
     },
     {
+      // Timestamps are often represented as `long` (64-bit integer) to store
+      // the number of milliseconds since the Unix epoch.
       "name": "createdAt",
       "type": "long"
     }

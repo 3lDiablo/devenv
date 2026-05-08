@@ -1,3 +1,25 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - CloudBeaver
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` overlay for the CloudBeaver
+#   component. It is responsible for packaging all the rendered configuration
+#   files into ConfigMaps and patching the base Deployment to mount them.
+#
+# How It Works:
+#   1.  `resources`: It includes the `base/cloudbeaver` component.
+#   2.  `configMapGenerator`: It creates multiple ConfigMaps from the configuration
+#       files that were rendered by the `Taskfile`. Each ConfigMap holds a
+#       specific piece of the CloudBeaver configuration.
+#   3.  `patches`: It applies a patch from `cloudbeaver.yaml` to the base
+#       Deployment. This patch adds the necessary `volumes` and `volumeMounts`
+#       so the pod can access the configuration from the generated ConfigMaps.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -9,17 +31,28 @@ labels:
 resources:
   - ../../../base/cloudbeaver
 
+# --- ConfigMap Generators ---
+# Creates several ConfigMaps from the rendered configuration files.
 configMapGenerator:
+  # ConfigMap for the main server configuration.
   - name: cloudbeaver-server-config
     files: [cloudbeaver.conf]
     options: {labels: {component: cloudbeaver}}
+  # ConfigMap for the initial admin user data.
   - name: cloudbeaver-initial-data-config
     files: [initial-data.conf]
     options: {labels: {component: cloudbeaver}}
+  # ConfigMap for the pre-configured connection to the local PostgreSQL database.
   - name: cloudbeaver-global-connections-config
-    files: [data-sources.json]
+    files: [initial-data-sources.conf, data-sources.json]
+    options: {labels: {component: cloudbeaver}}
+  # ConfigMap for product-specific branding/settings.
+  - name: cloudbeaver-product-config
+    files: [product.conf]
     options: {labels: {component: cloudbeaver}}
 
+# --- Patches ---
+# Applies the patch to mount the ConfigMaps as volumes.
 patches:
   - path: cloudbeaver.yaml
     target: {kind: Deployment, name: cloudbeaver}

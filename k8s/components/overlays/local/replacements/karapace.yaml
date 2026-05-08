@@ -1,99 +1,81 @@
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Replacement
-source:
-  kind: ConfigMap
-  name: global-values
-  fieldPath: data.images_karapace_full
-targets:
-  - select:
-      kind: Deployment
-      name: karapace
-    fieldPaths:
-      - spec.template.spec.containers.0.image
+# ==============================================================================
+#
+#               Kustomize Replacements - Karapace
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines the Kustomize `replacements` for the Karapace REST Proxy.
+#   It maps values from the `global-values` ConfigMap to the appropriate fields
+#   in the base Karapace Deployment and Service manifests.
+#
+# ==============================================================================
 
----
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Replacement
-source:
-  kind: ConfigMap
-  name: global-values
-  fieldPath: data.settings_karapace_rest_port
-targets:
-  - select:
-      kind: Service
-      name: rest-proxy
-    fieldPaths:
-      - spec.ports.0.port
+# --- Karapace Image ---
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.images_karapace_full
+  targets:
   - select:
       kind: Deployment
       name: karapace
     fieldPaths:
-      - spec.template.spec.containers.0.ports.0.containerPort
----
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Replacement
-source:
-  kind: ConfigMap
-  name: global-values
-  fieldPath: data.cluster_ports_5_node # karapace-rest
-targets:
-  - select:
-      kind: Service
-      name: rest-proxy
-    fieldPaths:
-      - spec.ports.0.nodePort
----
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Replacement
-source:
-  kind: ConfigMap
-  name: global-values
-  fieldPath: data.settings_karapace_rest_resources_requests_cpu
-targets:
-  - select:
-      kind: Deployment
-      name: karapace
-    fieldPaths:
-      - spec.template.spec.containers.0.resources.requests.cpu
+    - spec.template.spec.containers.0.image
 
----
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Replacement
-source:
-  kind: ConfigMap
-  name: global-values
-  fieldPath: data.settings_karapace_rest_resources_requests_memory
-targets:
-  - select:
-      kind: Deployment
-      name: karapace
-    fieldPaths:
-      - spec.template.spec.containers.0.resources.requests.memory
+# --- Karapace Port ---
+# Replaces the port in multiple locations to ensure consistency.
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_karapace_rest_port
+  targets:
+  # Target 1: The Service port.
+  - select: {kind: Service, name: karapace}
+    fieldPaths: [spec.ports.0.port]
+  # Target 2: The container port in the Deployment.
+  - select: {kind: Deployment, name: karapace}
+    fieldPaths: [spec.template.spec.containers.0.ports.0.containerPort]
+  # Target 3: The `KARAPACE_PORT` environment variable.
+  - select: {kind: Deployment, name: karapace}
+    fieldPaths: [spec.template.spec.containers.0.env.0.value]
 
----
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Replacement
-source:
-  kind: ConfigMap
-  name: global-values
-  fieldPath: data.settings_karapace_rest_resources_limits_cpu
-targets:
-  - select:
-      kind: Deployment
-      name: karapace
-    fieldPaths:
-      - spec.template.spec.containers.0.resources.limits.cpu
+# --- Karapace NodePort ---
+- source:
+    kind: ConfigMap
+    name: global-values
+    # The index `5` corresponds to the `karapace-rest` entry in `config.yaml`.
+    fieldPath: data.cluster_ports_5_node
+  targets:
+  - select: {kind: Service, name: karapace}
+    fieldPaths: [spec.ports.0.nodePort]
 
----
-apiVersion: kustomize.config.k8s.io/v1alpha1
-kind: Replacement
-source:
-  kind: ConfigMap
-  name: global-values
-  fieldPath: data.settings_karapace_rest_resources_limits_memory
-targets:
-  - select:
-      kind: Deployment
-      name: karapace
-    fieldPaths:
-      - spec.template.spec.containers.0.resources.limits.memory
+# --- Karapace Resources ---
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_karapace_rest_resources_cpu_request
+  targets:
+  - select: {kind: Deployment, name: karapace}
+    fieldPaths: [spec.template.spec.containers.0.resources.requests.cpu]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_karapace_rest_resources_memory_request
+  targets:
+  - select: {kind: Deployment, name: karapace}
+    fieldPaths: [spec.template.spec.containers.0.resources.requests.memory]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_karapace_rest_resources_cpu_limit
+  targets:
+  - select: {kind: Deployment, name: karapace}
+    fieldPaths: [spec.template.spec.containers.0.resources.limits.cpu]
+- source:
+    kind: ConfigMap
+    name: global-values
+    fieldPath: data.settings_karapace_rest_resources_memory_limit
+  targets:
+  - select: {kind: Deployment, name: karapace}
+    fieldPaths: [spec.template.spec.containers.0.resources.limits.memory]

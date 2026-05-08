@@ -1,0 +1,96 @@
+# ==============================================================================
+#
+#               Grafana - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for Grafana, the visualization layer of
+#   the telemetry stack. Grafana is used to create and display dashboards based
+#   on the metrics collected by Prometheus.
+#
+# Configuration Method:
+#   Grafana has a powerful provisioning system that allows datasources and
+#   dashboards to be configured declaratively. This deployment works by:
+#   1.  Mounting a `datasources.yaml` file (from a ConfigMap) into the
+#       `/etc/grafana/provisioning/datasources` directory. Grafana automatically
+#       detects this and configures the Prometheus datasource.
+#   2.  Mounting a `providers.yaml` file (from a ConfigMap) into the
+#       `/etc/grafana/provisioning/dashboards` directory. This tells Grafana to
+#       look for dashboard JSON files in a specific path.
+#   3.  Mounting the actual dashboard JSON files (from another ConfigMap) into
+#       the path defined in the provider, `/var/lib/grafana/dashboards`.
+#
+# Templating:
+#   The image tag, resource limits, and admin credentials will be patched by the
+#   `local` Kustomize overlay from `config.yaml`.
+#
+# ==============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: infrastructure
+  labels:
+    component: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+        component: grafana
+    spec:
+      containers:
+      - name: grafana
+        # The image will be patched by Kustomize from `images_grafana_full`.
+        image: grafana/grafana:11.2.0
+        env:
+        # --- Security & Authentication ---
+        # These environment variables configure the Grafana instance.
+        # The admin user and password will be patched by the `local` overlay.
+        - name: GF_SECURITY_ADMIN_USER
+          value: "admin"
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "admin_password"
+        # Disables anonymous access for this local setup.
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "false"
+        - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+          value: "Admin"
+        ports:
+        - containerPort: 3000 # The default port for the Grafana web UI.
+          name: http
+        # Resource allocations will be patched by the `local` overlay.
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        volumeMounts:
+        # Mounts the datasource provisioning configuration.
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        # Mounts the dashboard provider provisioning configuration.
+        - name: grafana-providers
+          mountPath: /etc/grafana/provisioning/dashboards
+        # Mounts the actual dashboard JSON files.
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards
+      volumes:
+      # These volumes are backed by ConfigMaps that are defined in the `grafana` kustomization.
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+      - name: grafana-providers
+        configMap:
+          name: grafana-providers
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards

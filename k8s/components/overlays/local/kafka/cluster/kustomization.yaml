@@ -1,14 +1,38 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Kafka Cluster CR
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` overlay for the main `Kafka`
+#   Custom Resource. It includes the base `Kafka` CR and then applies a patch
+#   to it.
+#
+#   The patching for most fields (like `version` or `nodePort`) is handled by
+#   the `replacements` in the top-level overlay. This file handles patches that
+#   are more structural, such as adding resource limits to the Entity Operator.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Adds a common label to the Kafka CR.
 labels:
 - includeSelectors: true
   pairs:
     component: kafka-cluster
 
+# Includes the base `Kafka` Custom Resource manifest.
 resources:
   - ../../../../base/kafka/cluster
 
+# --- Patches ---
+# Applies modifications to the base Kafka CR.
 patches:
-  - path: entity-operator.yaml
-    target: {kind: Kafka, name: kafka-cluster}
+  - path: entity-operator.yaml # The file containing the patch.
+    target:
+      # The patch will be applied to the `Kafka` resource named `kafka-cluster`.
+      kind: Kafka
+      name: kafka-cluster

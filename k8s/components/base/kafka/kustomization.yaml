@@ -1,7 +1,46 @@
+# ==============================================================================
+#
+#               Kustomize - Kafka Component Aggregator
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the Kubernetes resources and sub-components
+#   required to deploy a Strimzi-based Kafka cluster. Strimzi uses a declarative
+#   approach where you define the desired state of your Kafka cluster using
+#   Custom Resources (CRs), and the Strimzi Operator handles the rest.
+#
+#   This file aggregates the definitions for the operator itself, as well as the
+#   Custom Resources that define the cluster's topology (Node Pools) and the
+#   cluster's main configuration.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+# ------------------------------------------------------------------------------
+# § Component Resources
+#   Lists the sub-directories containing the manifests for each part of the
+#   Kafka deployment.
+# ------------------------------------------------------------------------------
 resources:
+  # The Strimzi Cluster Operator is the main controller that watches for and
+  # manages Kafka-related Custom Resources. This resource path points to the
+  # manifests needed to deploy the operator itself.
   - operator
+
+  # This contains the main `Kafka` Custom Resource manifest. This CR is the
+  # high-level definition of the Kafka cluster, specifying things like the
+  # version, broker and controller configuration, and listeners.
   - cluster
+
+  # This contains the `KafkaNodePool` Custom Resource for the Kafka brokers.
+  # Node Pools allow for defining different configurations (e.g., resources,
+  # storage) for different groups of Kafka nodes.
   - broker
+
+  # This contains the `KafkaNodePool` Custom Resource for the KRaft controllers.
+  # In a Zookeeper-less KRaft setup, these nodes are responsible for metadata
+  # management.
   - controller

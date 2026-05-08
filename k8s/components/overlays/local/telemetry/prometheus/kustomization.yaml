@@ -1,0 +1,32 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Prometheus
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` overlay for Prometheus. Its
+#   primary purpose is to include the base manifests.
+#
+#   The actual patching (e.g., setting resource limits, image tag) is handled
+#   by the `replacements` defined in the top-level `telemetry.yaml` replacement
+#   file.
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Includes the base manifests for Prometheus.
+resources:
+  - ../../../../base/telemetry/prometheus
+
+# Override the base ConfigMap generator to use the rendered configuration.
+configMapGenerator:
+  - name: prometheus-conf
+    behavior: replace
+    files:
+      - prometheus.yml
+    options:
+      labels:
+        component: prometheus

@@ -1,14 +1,45 @@
+# ==============================================================================
+#
+#               Strimzi - Kafka Node Pool (Controllers)
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a `KafkaNodePool` Custom Resource for the KRaft
+#   (Zookeeper-less) controllers. In a KRaft setup, these nodes are responsible
+#   for managing the cluster's metadata, a role previously handled by Zookeeper.
+#
+#   This pool specifically defines the nodes that will have the `controller` role.
+#   They form a consensus group to manage the metadata log.
+#
+# Key Features:
+#   -   Role-Based Configuration: Explicitly assigns the `controller` role.
+#   -   Resource Management: Defines the resources for the controller pods. These
+#       are placeholders to be patched by the `local` overlay.
+#   -   Persistent Storage: Configures a smaller persistent volume for the
+#       controllers, as they only store metadata, not topic data.
+#
+# ==============================================================================
+
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaNodePool
 metadata:
-  name: controllers
+  name: controller # The name of the node pool.
   namespace: infrastructure
   labels:
     component: kafka-nodepool
+    # This label associates this Node Pool with the `Kafka` resource named `kafka-cluster`.
     strimzi.io/cluster: kafka-cluster
 spec:
+  # The number of controller pods. For a local dev setup, 1 is sufficient.
+  # This will be patched from `config.yaml`.
   replicas: 1
-  roles: [controller]
+  # The roles assigned to nodes in this pool. Here, it's just the `controller` role.
+  roles:
+    - controller
+  # --- Resource Allocation ---
+  # These are base values and will be patched by the `local` overlay from `config.yaml`.
+  # Controller nodes are typically less resource-intensive than broker nodes.
   resources:
     requests:
       cpu: "100m"
@@ -16,14 +47,23 @@ spec:
     limits:
       cpu: "100m"
       memory: "128Mi"
+  # --- JVM Options ---
+  # JVM heap settings for the controller nodes. These will be patched by the overlay.
   jvmOptions:
-    -Xms: "128m"
-    -Xmx: "128m"
+    "-Xms": "128m"
+    "-Xmx": "128m"
+  # --- Storage Configuration ---
   storage:
     type: jbod
     volumes:
       - id: 0
         type: persistent-claim
-        size: 2Gi 
-        deleteClaim: false 
+        # A smaller disk is requested as controllers only store cluster metadata,
+        # which is much smaller than topic data.
+        size: 2Gi
+        # The PVC and its data will not be deleted when the cluster is torn down.
+        deleteClaim: false
+        # This field indicates that the volume stores KRaft metadata.
+        # `shared` means the metadata is co-located with data on the same volume.
+        # This is an internal detail for Strimzi's management.
         kraftMetadata: shared

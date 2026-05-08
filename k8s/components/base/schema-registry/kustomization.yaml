@@ -1,6 +1,23 @@
-# Base: Schema Registry
+# ==============================================================================
+#
+#               Kustomize - Apicurio Schema Registry Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the Kubernetes resources required to
+#   deploy the Apicurio Schema Registry. It acts as a self-contained "component"
+#   that is included in the main base aggregator.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# ------------------------------------------------------------------------------
+# § Component Resources
+#   Lists the raw Kubernetes manifests that make up the Schema Registry component.
+# ------------------------------------------------------------------------------
 resources:
+  # This file contains both the Deployment and the Service for the registry.
   - schema-registry.yaml

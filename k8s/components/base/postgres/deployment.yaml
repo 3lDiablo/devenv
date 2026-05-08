@@ -1,36 +1,71 @@
+# ==============================================================================
+#
+#               PostgreSQL - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for the PostgreSQL server. A Deployment
+#   manages a ReplicaSet, which in turn ensures that a specified number of pod
+#   replicas are running at all times.
+#
+#   This file also defines a PersistentVolumeClaim (PVC) to provide stable
+#   storage for the database, ensuring data persists across pod restarts.
+#
+# Key Features:
+#   - Main Container: Runs the official PostgreSQL image.
+#   - Metrics Sidecar: Includes a `postgres-exporter` container in the same pod
+#     to collect and expose PostgreSQL metrics for Prometheus.
+#   - Persistent Storage: Uses a PVC to request persistent storage from the
+#     cluster's default storage class.
+#   - Templating: Uses placeholder values for image tags, resources, and credentials.
+#     These are patched by the `local` Kustomize overlay using values from the
+#     `global-values` ConfigMap, which is generated from `config.yaml`.
+#
+# ==============================================================================
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
-  namespace: infrastructure
+  namespace: infrastructure # All services are deployed in the 'infrastructure' namespace.
   labels:
-    component: postgres
+    component: postgres # A label for filtering and identifying the component.
 spec:
-  replicas: 1
+  replicas: 1 # For a local dev environment, a single replica is sufficient.
   selector:
     matchLabels:
-      app: postgres
+      app: postgres # The label selector to identify which pods this deployment manages.
   template:
     metadata:
       labels:
-        app: postgres
+        app: postgres # Pods created from this template will have these labels.
         component: postgres
     spec:
       containers:
+      # --- Main PostgreSQL Container ---
       - name: postgres
+        # The image is a placeholder. The actual image (registry, repo, tag) will be
+        # patched by Kustomize from the `images_postgres_full` value in the global ConfigMap.
         image: postgres:17.0-alpine
         ports:
-        - containerPort: 5432
+        - containerPort: 5432 # The standard PostgreSQL port.
           name: tcp-postgres
         env:
+        # These environment variables configure the PostgreSQL instance on first run.
+        # The values are placeholders and will be patched by Kustomize using variables
+        # like `$(settings_postgres_user)`, `$(settings_postgres_password)`, etc.
         - name: POSTGRES_DB
           value: "postgres"
         - name: POSTGRES_USER
           value: "postgres"
         - name: POSTGRES_PASSWORD
           value: "postgres"
+        # Specifies a subdirectory for the data directory to avoid potential permission issues.
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
+        # Resource requests and limits are placeholders. They will be patched by Kustomize
+        # from values like `$(settings_postgres_resources_cpu_request)`, etc.
         resources:
           requests:
             cpu: 100m
@@ -39,13 +74,52 @@ spec:
             cpu: 500m
             memory: 512Mi
         volumeMounts:
+        # Mounts the persistent volume into the container at the specified path.
         - name: postgres-storage
           mountPath: /var/lib/postgresql/data
+
+      # --- Metrics Exporter Sidecar Container ---
+      # This container runs in the same pod as PostgreSQL. It connects to the database
+      # on localhost, runs queries to collect internal metrics, and exposes them on
+      # port 9187 for Prometheus to scrape.
+      # NOTE: Port 9187 is hardcoded in the exporter image and is non-configurable.
+      - name: postgres-exporter
+        # The image will be patched by Kustomize from `images_postgres_exporter_full`.
+        image: prometheuscommunity/postgres-exporter:v0.16.0
+        ports:
+        - containerPort: 9187
+          name: metrics
+        env:
+        # The exporter needs credentials to connect to the database.
+        # These values will be patched by Kustomize, ensuring they are consistent
+        # with the main container's credentials.
+        - name: DATA_SOURCE_USER
+          value: "postgres"
+        - name: DATA_SOURCE_PASS
+          value: "postgres"
+        # The URI for the exporter to connect to. It connects to localhost as it's in the same pod.
+        - name: DATA_SOURCE_URI
+          value: "localhost:5432/postgres?sslmode=disable"
+        # The exporter is very lightweight and requires minimal resources.
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
       volumes:
+      # Defines the volume that will be used for persistent storage.
       - name: postgres-storage
+        # This volume is backed by a PersistentVolumeClaim.
         persistentVolumeClaim:
           claimName: postgres-pvc
 ---
+# ==============================================================================
+#
+#               PostgreSQL - Persistent Volume Claim (PVC)
+#
+# ==============================================================================
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -54,8 +128,12 @@ metadata:
   labels:
     component: postgres
 spec:
+  # Access mode `ReadWriteOnce` means the volume can be mounted as read-write by a single node.
+  # This is suitable for a single-replica database.
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
+      # Requests 5Gi of storage. In a local Kind cluster, this is provided by the
+      # default storage provisioner (usually `standard`).
       storage: 5Gi

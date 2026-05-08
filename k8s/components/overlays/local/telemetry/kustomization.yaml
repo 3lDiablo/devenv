@@ -1,0 +1,27 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Telemetry Stack Aggregator
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file acts as an aggregator for the `local` overlay of the
+#   entire telemetry stack. It directs Kustomize to the subdirectories for each
+#   component (`prometheus`, `grafana`, etc.) where the specific overlays are
+#   defined.
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ------------------------------------------------------------------------------
+# § Overlay Resources
+#   Lists the sub-directories containing the Kustomize overlays for each piece
+#   of the telemetry stack.
+# ------------------------------------------------------------------------------
+resources:
+  - otel-collector
+  - prometheus
+  - grafana
+  - kube-state-metrics

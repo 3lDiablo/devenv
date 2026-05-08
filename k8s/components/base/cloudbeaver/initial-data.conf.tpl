@@ -1,11 +1,7 @@
 {
+    "adminName": "ADMIN_USER",
+    "adminPassword": "ADMIN_PASSWORD",
     "teams": [
-        {
-            "subjectId": "admin",
-            "teamName": "Administrators",
-            "description": "Administrative access. Has total and full authority.",
-            "permissions": ["admin"]
-        },
         {
             "subjectId": "user",
             "teamName": "user",

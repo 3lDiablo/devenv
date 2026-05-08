@@ -1,29 +1,60 @@
-# ⚡ Centralized Project Configuration
-# ---------------------------------
-# This file is the "Single Source of Truth" for the entire environment.
-# All downstream manifests (Kind, Kustomize, UI configs) are generated from here.
+# ==============================================================================
+#
+#               ⚡ Centralized Project Configuration (Single Source of Truth) ⚡
+#
+# ==============================================================================
+#
+# Overview:
+#   This file serves as the "Single Source of Truth" (SSoT) for the entire local
+#   development environment. All configurations, versions, and settings are defined
+#   here. Downstream components, such as Kubernetes manifests (Kind, Helm),
+#   and application configurations, are dynamically generated from the values
+#   in this file. This declarative approach ensures consistency and simplifies
+#   environment management.
+#
+# Structure:
+#   - settings: Defines the configuration for all services (Kafka, Postgres, UIs, etc.),
+#               including resource limits and application-specific properties.
+#   - cluster:  Specifies the configuration for the underlying Kind Kubernetes cluster,
+#               including node image, port mappings, and provider details.
+#   - images:   Lists the container images and their versions to be used for all
+#               services, centralizing version management.
+#
+# ==============================================================================
 
+# ------------------------------------------------------------------------------
+# § SERVICE SETTINGS
+#   This section contains the configuration for each service deployed in the cluster.
+#   It includes resource allocations (CPU/memory), ports, and application-specific
+#   parameters. The chosen tools prioritize being lightweight and open-source.
+# ------------------------------------------------------------------------------
 settings:
-  # KAFKA (Strimzi): We use Strimzi for its mature operator pattern and KRaft support.
+  # --- Kafka (Strimzi Operator) ---
+  # Strimzi is used for its mature operator pattern, which simplifies Kafka
+  # management on Kubernetes. It supports KRaft mode for a Zookeeper-less setup.
   kafka:
-    cluster_name: "kafka-cluster"
-    version: "4.2.0"
-    metadata_version: "4.2-IV0" # KRaft metadata version
-    broker_replicas: 1
-    controller_replicas: 1
-    default_partitions: 6
-    port: &kafka_broker_port 9092
+    cluster_name: "kafka-cluster"    # The name of the Kafka cluster CRD instance.
+    version: "4.2.0"                 # The Kafka version to be deployed.
+    metadata_version: "4.2-IV1"      # The KRaft metadata version. Must be compatible with the Kafka version.
+    broker_replicas: 1               # Number of Kafka broker replicas. 1 is sufficient for a local dev environment.
+    controller_replicas: 1           # Number of KRaft controller replicas. 1 is sufficient for local dev.
+    default_partitions: 6            # Default number of partitions for auto-created topics.
+    port: &kafka_broker_port 9092    # Internal port for Kafka brokers. Also used as an anchor for the host port mapping.
     resources:
+      # Resource requests and limits for Kafka brokers.
       cpu:
-        request: "100m"
-        limit: "1"
+        request: "100m"              # Initial CPU allocation.
+        limit: "1"                   # Maximum CPU allocation.
       memory:
-        request: "512Mi"
-        limit: "768Mi" # Managed by Taskfile JVM auto-sizing (70% of limit)
+        request: "512Mi"             # Initial memory allocation.
+        limit: "1Gi"                 # Maximum memory allocation. The Taskfile auto-sizes JVM heap based on this (70%).
 
-  # STRIMZI ENTITY OPERATOR: Manages KafkaTopics and KafkaUsers CRDs.
+  # --- Strimzi Entity Operator ---
+  # This operator manages Kafka-related CRDs like KafkaTopic and KafkaUser,
+  # allowing declarative management of Kafka resources via Kubernetes manifests.
   entity_operator:
     resources:
+      # Resource requests and limits for the Entity Operator pod.
       cpu:
         request: "100m"
         limit: "500m"
@@ -31,13 +62,17 @@ settings:
         request: "256Mi"
         limit: "512Mi"
 
-  # POSTGRES: Used as the storage backend for Apicurio Registry.
+  # --- PostgreSQL ---
+  # Used as the storage backend for the Apicurio Schema Registry.
+  # A relational database is more robust and observable for schema storage than Kafka itself.
   postgres:
-    db_name: "postgres"
-    user: "postgres"
-    password: "postgres"
-    port: &postgres_port 5432
+    db_name: "postgres"              # Default database name.
+    user: "postgres"                 # Default administrative user.
+    password: "postgres"             # Default password for the user.
+    port: &postgres_port 5432        # Internal port for the PostgreSQL server.
+    metrics_port: 9187               # [FIXED IN IMAGE] Port where postgres-exporter sidecar exposes metrics. NON-CONFIGURABLE.
     resources:
+      # Resource requests and limits for the PostgreSQL pod.
       cpu:
         request: "100m"
         limit: "500m"
@@ -45,11 +80,13 @@ settings:
         request: "256Mi"
         limit: "512Mi"
 
-  # APICURIO REGISTRY: Chosen for its lightness, SQL backend (Postgres), 
-  # and Confluent-compatible REST API.
+  # --- Apicurio Schema Registry ---
+  # Chosen for its lightness, SQL backend support (Postgres), and a Confluent-compatible
+  # REST API, making it a versatile choice for schema management.
   schema_registry:
-    port: &sr_port 8081
+    port: &sr_port 8081              # Internal port for the Schema Registry API.
     resources:
+      # Resource requests and limits for the Apicurio pod.
       cpu:
         request: "100m"
         limit: "500m"
@@ -57,10 +94,13 @@ settings:
         request: "256Mi"
         limit: "384Mi"
 
-  # KAFKA CONNECT: Modular framework for connecting Kafka with external systems.
+  # --- Kafka Connect ---
+  # A framework for building and running streaming data pipelines between Kafka and other systems.
+  # It's deployed here to facilitate easy integration testing.
   kafka_connect:
-    port: &kc_port 8083
+    port: &kc_port 8083              # Internal port for the Kafka Connect REST API.
     resources:
+      # Resource requests and limits for the Kafka Connect pod.
       cpu:
         request: "100m"
         limit: "1"
@@ -68,11 +108,14 @@ settings:
         request: "512Mi"
         limit: "768Mi"
 
-  # REDPANDA CONSOLE: Modern, high-performance UI for Kafka. 
-  # Why not Confluent UI? Redpanda is stateless, lighter, and more intuitive for developers.
+  # --- Redpanda Console (formerly Kowl) ---
+  # A modern, high-performance web UI for Kafka.
+  # Why not Confluent UI? Redpanda Console is stateless, lighter, and offers a more
+  # intuitive developer experience for browsing topics, messages, and consumer groups.
   redpanda_console:
-    port: &rp_port 8080
+    port: &rp_port 8080              # Internal port for the Redpanda Console web UI.
     resources:
+      # Resource requests and limits for the Redpanda Console pod. It's very lightweight.
       cpu:
         request: "50m"
         limit: "200m"
@@ -80,11 +123,14 @@ settings:
         request: "64Mi"
         limit: "128Mi"
 
-  # KARAPACE REST PROXY: Provides a REST API for Kafka. 
-  # Why Karapace? It supports schema-aware event publishing, filling the gap in Strimzi Bridge.
+  # --- Karapace REST Proxy ---
+  # Provides a RESTful API for interacting with Kafka, useful for web clients.
+  # Why Karapace? It supports schema-aware event publishing (binary and JSON),
+  # a feature missing in the default Strimzi Kafka Bridge.
   karapace_rest:
-    port: &karapace_port 8082
+    port: &karapace_port 8082        # Internal port for the Karapace REST Proxy.
     resources:
+      # Resource requests and limits for the Karapace pod.
       cpu:
         request: "100m"
         limit: "500m"
@@ -92,14 +138,17 @@ settings:
         request: "256Mi"
         limit: "512Mi"
 
-  # CLOUDBEAVER: Web-based DB manager. 
-  # Why not pgAdmin? Cloudbeaver is more lightweight and has a cleaner UI for quick dev tasks.
+  # --- CloudBeaver ---
+  # A lightweight, web-based database management tool.
+  # Why not pgAdmin? CloudBeaver has a cleaner UI, is more resource-efficient,
+  # and is well-suited for quick development tasks against the PostgreSQL database.
   cloudbeaver:
-    db_name: "cloudbeaver"
-    admin_user: "admin"
-    admin_password: "admin"
-    port: &cb_port 8978
+    db_name: "cloudbeaver"           # Internal database used by CloudBeaver to store its own configuration.
+    admin_user: "admin"              # Default admin user for the CloudBeaver UI.
+    admin_password: "CloudBeaver123!" # Default admin password.
+    port: &cb_port 8978              # Internal port for the CloudBeaver web UI.
     resources:
+      # Resource requests and limits for the CloudBeaver pod.
       cpu:
         request: "100m"
         limit: "500m"
@@ -107,63 +156,171 @@ settings:
         request: "256Mi"
         limit: "512Mi"
 
-cluster:
-  name: "dev-cluster"
-  provider: "docker" # Supports 'docker' or 'podman'
-  node_image: "kindest/node:v1.31.0"
-  api_server_address: "127.0.0.1"
-  api_server_port: 6443
-  ports:
-    # Port Mappings: maps Host ports to NodePort services inside Kind.
-    - name: kafka-broker
-      host: *kafka_broker_port
-      node: 30092
-    - name: postgres
-      host: *postgres_port
-      node: 30432
-    - name: schema-registry
-      host: *sr_port
-      node: 30081
-    - name: kafka-connect
-      host: *kc_port
-      node: 30083
-    - name: redpanda-console
-      host: *rp_port
-      node: 30080
-    - name: karapace-rest
-      host: *karapace_port
-      node: 30082
-    - name: cloudbeaver
-      host: *cb_port
-      node: 30978
+  # --- Telemetry Stack (OTel, Prometheus, Grafana) ---
+  # A unified observability stack for metrics collection and visualization.
+  # This stack was chosen over alternatives like SigNoz to stay within the 8GB
+  # total RAM limit of a typical local development machine.
+  telemetry:
+    enabled: true                    # A feature flag to enable or disable the entire telemetry stack.
+    common_metrics_port: 8080        # Default port for metrics for most components (KSM, SR, Redpanda).
+    otel_collector:
+      port: 4317                     # OTLP gRPC port for receiving telemetry data.
+      metrics_port: 8888             # Port for exposing Prometheus metrics from the collector itself.
+      exporter_port: 8889            # Port where the collector exposes aggregated metrics for Prometheus.
+      resources:
+        # Resource requests and limits for the OpenTelemetry Collector.
+        cpu:
+          request: "50m"
+          limit: "200m"
+        memory:
+          request: "256Mi"
+          limit: "1Gi"
+    prometheus:
+      port: &prom_port 9090          # Internal port for the Prometheus server UI and API.
+      kafka_metrics_port: 9404       # Port where Strimzi exposes Kafka metrics for Prometheus to scrape.
+      resources:
+        # Resource requests and limits for the Prometheus server.
+        cpu:
+          request: "100m"
+          limit: "500m"
+        memory:
+          request: "256Mi"
+          limit: "512Mi"
+    grafana:
+      port: &graf_port 3000          # Internal port for the Grafana web UI.
+      admin_user: "admin"            # Default admin user for Grafana.
+      admin_password: "admin_password" # Default admin password for Grafana.
+      resources:
+        # Resource requests and limits for Grafana. It's relatively lightweight.
+        cpu:
+          request: "50m"
+          limit: "200m"
+        memory:
+          request: "128Mi"
+          limit: "256Mi"
 
+# ------------------------------------------------------------------------------
+# § KIND CLUSTER CONFIGURATION
+#   This section defines the properties of the local Kind (Kubernetes in Docker)
+#   cluster. It specifies the cluster name, node image, and networking setup.
+# ------------------------------------------------------------------------------
+cluster:
+  name: "dev-cluster"                # The name of the Kind cluster.
+  provider: "docker"                 # The backend provider for Kind. Can be 'docker' or 'podman'.
+  node_image: "kindest/node:v1.31.0" # The container image for the Kubernetes nodes.
+  api_server_address: "127.0.0.1"    # The local address where the Kubernetes API server will be accessible.
+  api_server_port: 6443              # The local port for the Kubernetes API server.
+  ports:
+    # --- Port Mappings (Host -> Kind Node) ---
+    # This list maps ports from the host machine to NodePort services running inside
+    # the Kind cluster, making the services accessible via localhost.
+    # The `host` port references a YAML anchor defined in the `settings` section for consistency.
+    - name: kafka-broker
+      host: *kafka_broker_port       # Host port (e.g., 9092)
+      node: 30092                    # Kubernetes NodePort
+    - name: postgres
+      host: *postgres_port           # Host port (e.g., 5432)
+      node: 30432                    # Kubernetes NodePort
+    - name: schema-registry
+      host: *sr_port                 # Host port (e.g., 8081)
+      node: 30081                    # Kubernetes NodePort
+    - name: kafka-connect
+      host: *kc_port                 # Host port (e.g., 8083)
+      node: 30083                    # Kubernetes NodePort
+    - name: redpanda-console
+      host: *rp_port                 # Host port (e.g., 8080)
+      node: 30080                    # Kubernetes NodePort
+    - name: karapace-rest
+      host: *karapace_port           # Host port (e.g., 8082)
+      node: 30082                    # Kubernetes NodePort
+    - name: cloudbeaver
+      host: *cb_port                 # Host port (e.g., 8978)
+      node: 30978                    # Kubernetes NodePort
+    - name: prometheus
+      host: *prom_port               # Host port (e.g., 9090)
+      node: 30090                    # Kubernetes NodePort
+    - name: grafana
+      host: *graf_port               # Host port (e.g., 3000)
+      node: 30300                    # Kubernetes NodePort
+
+# ------------------------------------------------------------------------------
+# § CONTAINER IMAGE REFERENCES
+#   This section centralizes all container image definitions. Using official images
+#   directly is preferred to avoid supply-chain risks associated with third-party
+#   packagers (e.g., Bitnami), where possible.
+# ------------------------------------------------------------------------------
 images:
-  # We use official images directly to avoid supply-chain risks associated 
-  # with third-party packagers like Bitnami where possible.
+  # --- PostgreSQL Image ---
   postgres:
-    registry: docker.io
-    repository: library/postgres
-    tag: "17.0-alpine"
+    registry: docker.io              # The container registry.
+    repository: library/postgres     # The image repository.
+    tag: "17.0-alpine"               # The image tag/version. Alpine is used for its small size.
+
+  # --- Strimzi Operator Image ---
   strimzi_operator:
     registry: quay.io
     repository: strimzi/operator
     tag: "0.51.0"
+
+  # --- Strimzi Kafka Image ---
+  # This image is specifically built to work with the Strimzi operator version.
   kafka:
     registry: quay.io
     repository: strimzi/kafka
-    tag: "0.51.0-kafka-4.2.0"
+    tag: "0.51.0-kafka-4.2.0"        # The tag combines both Strimzi and Kafka versions.
+
+  # --- Apicurio Schema Registry Image ---
   schema_registry:
     registry: quay.io
-    repository: apicurio/apicurio-registry-sql
+    repository: apicurio/apicurio-registry-sql # SQL variant for Postgres backend.
     tag: "2.6.13.Final"
+
+  # --- Redpanda Console Image ---
   redpanda_console:
-    registry: docker.redpanda.com/redpandadata/console
-    tag: "v3.7.1"
+    registry: docker.redpanda.com
+    repository: redpandadata/console
+    tag: "v3.7.2"
+
+  # --- Karapace Image ---
   karapace:
     registry: ghcr.io
     repository: aiven/karapace
     tag: "3.7.1"
+
+  # --- CloudBeaver Image ---
   cloudbeaver:
     registry: docker.io
     repository: dbeaver/cloudbeaver
     tag: "26.0.2"
+
+  # --- OpenTelemetry Collector Image ---
+  otel_collector:
+    registry: otel
+    repository: opentelemetry-collector-contrib # The 'contrib' version includes more receivers/exporters.
+    tag: "0.111.0"
+
+  # --- Prometheus Image ---
+  prometheus:
+    registry: quay.io
+    repository: prometheus/prometheus
+    tag: "v2.54.1"
+
+  # --- Grafana Image ---
+  grafana:
+    registry: docker.io
+    repository: grafana/grafana
+    tag: "11.2.0"
+
+  # --- Prometheus Postgres Exporter Image ---
+  # Used to export PostgreSQL metrics for Prometheus to scrape.
+  postgres_exporter:
+    registry: docker.io
+    repository: prometheuscommunity/postgres-exporter
+    tag: "v0.16.0"
+
+  # --- Kube State Metrics Image ---
+  # Gathers metrics about the state of Kubernetes objects (e.g., deployments, pods).
+  kube_state_metrics:
+    registry: registry.k8s.io
+    repository: kube-state-metrics/kube-state-metrics
+    tag: "v2.13.0"

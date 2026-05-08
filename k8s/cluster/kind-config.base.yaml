@@ -1,19 +1,45 @@
-# ⚡ Kind Base Configuration
-# -----------------------
-# This file defines the static infrastructure of the Kind cluster.
-# Dynamic values (node image, port mappings) are merged from config.yaml
-# during the "render" stage.
+# ==============================================================================
+#
+#               ⚡ Kind Cluster - Base Configuration Template ⚡
+#
+# ==============================================================================
+#
+# Overview:
+#   This file serves as the base template for creating the Kind (Kubernetes in Docker)
+#   cluster. It defines the static, foundational structure of the cluster, such as
+#   the node roles and networking configuration.
+#
+# Templating:
+#   This is a template file, not a final manifest. The `Taskfile`'s `render:kind`
+#   task processes this file using `yq`. It injects dynamic values from the main
+#   `config.yaml` file to produce the final `kind.yaml` configuration used for
+#   cluster creation.
+#
+# Placeholders:
+#   - The `nodes.image` and `nodes.extraPortMappings` fields are intentionally left
+#     absent. They are dynamically populated from `config.yaml`
+#     during the rendering step. This allows for centralized management of the
+#     Kubernetes version and service ports.
+#
+# ==============================================================================
 
+# Specifies the Kind API version for the Cluster object.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+
+# Defines the set of nodes that will form the cluster.
 nodes:
+  # For a lightweight local environment, a single control-plane node is sufficient.
+  # It will run both the Kubernetes control plane components and our application workloads.
   - role: control-plane
-    # image: placeholder (injected by yq)
-    # extraPortMappings: placeholder (injected by yq)
+    # image: placeholder (This will be injected by `yq` from `config.yaml`'s `cluster.node_image` value)
+    # extraPortMappings: placeholder (This will be injected by `yq` from `config.yaml`'s `cluster.ports` list)
 
+# Configures the networking for the Kind cluster.
 networking:
-  # Injected by yq from config.yaml
+  # The address on the host machine where the Kubernetes API server will be exposed.
+  # This is hardcoded to 127.0.0.1 for local access.
   apiServerAddress: "127.0.0.1"
+  # The port on the host machine for the Kubernetes API server.
+  # This value is taken from `config.yaml`.
   apiServerPort: 6443
-
-

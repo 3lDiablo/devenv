@@ -1,4 +1,26 @@
 {
+  "_comment": [
+    "==============================================================================",
+    "",
+    "               Kafka Topic & Schema Definition: card-event",
+    "",
+    "==============================================================================",
+    "",
+    "Overview:",
+    "  This JSON file serves as a declarative \"source of truth\" for a single Kafka",
+    "  topic. The `render:topics` and `provision:kafka` tasks in the Taskfile use",
+    "  this file to perform two key actions:",
+    "",
+    "  1.  Generate a `KafkaTopic` Custom Resource manifest for Strimzi, which",
+    "      creates the topic in the Kafka cluster with the specified configuration.",
+    "  2.  Register the associated Avro/JSON schema(s) with the Apicurio Schema",
+    "      Registry under the appropriate subject name.",
+    "",
+    "  This approach allows developers to manage Kafka resources (topics, schemas,",
+    "  and their bindings) in a simple, declarative, and version-controllable way.",
+    "",
+    "=============================================================================="
+  ],
   "topic_name": "local-card-tokenisation-event-v1",
   "partitions_count": 2,
   "config": {

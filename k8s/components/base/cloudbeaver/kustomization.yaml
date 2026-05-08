@@ -1,9 +1,23 @@
+# ==============================================================================
+#
+#               Kustomize - CloudBeaver Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the Kubernetes resources required to
+#   deploy the CloudBeaver web UI. It acts as a self-contained "component"
+#   that is included in the main base aggregator.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# The 'labels' section was removed as it was part of a previous, incorrect fix.
-# The base should be as simple as possible.
-
+# ------------------------------------------------------------------------------
+# § Component Resources
+#   Lists the raw Kubernetes manifests that make up the CloudBeaver component.
+# ------------------------------------------------------------------------------
 resources:
 - deployment.yaml
 - service.yaml

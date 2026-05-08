@@ -1,24 +1,55 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - PostgreSQL
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` environment overlay for the
+#   PostgreSQL component. It takes the generic `base/postgres` manifests and
+#   applies specific patches and configurations for local development.
+#
+# How It Works:
+#   1.  `resources`: It includes the `base/postgres` component, inheriting its
+#       Deployment and Service.
+#   2.  `configMapGenerator`: It creates a new ConfigMap named `postgres-init-scripts`
+#       from the `init-db.sql` file. This script will be used to initialize the
+#       database.
+#   3.  `patches`: It applies a strategic merge patch from `postgres.yaml` to the
+#       base Deployment. This patch will add the `volumeMount` for the init script.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Adds a common label to all resources defined or referenced here.
 labels:
 - includeSelectors: true
   pairs:
     component: postgres
 
+# Includes the base manifests for PostgreSQL. Kustomize will find and use
+# `k8s/components/base/postgres/kustomization.yaml`.
 resources:
   - ../../../base/postgres
 
+# --- ConfigMap Generator ---
+# Creates a ConfigMap to hold database initialization scripts.
 configMapGenerator:
   - name: postgres-init-scripts
     files:
+      # The content of `init-db.sql` will be placed in the ConfigMap.
       - init-db.sql
     options:
       labels:
         component: postgres
 
+# --- Patches ---
+# Applies modifications to the base resources.
 patches:
-  - path: postgres.yaml
+  - path: postgres.yaml # The file containing the patch.
     target:
+      # The patch will be applied to the resource that matches this target.
       kind: Deployment
       name: postgres

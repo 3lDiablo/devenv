@@ -1,0 +1,37 @@
+# ==============================================================================
+#
+#               Kube State Metrics - ClusterRoleBinding
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a `ClusterRoleBinding`. Its purpose is to grant the
+#   permissions defined in a `ClusterRole` to a specific user, group, or
+#   `ServiceAccount`.
+#
+#   This binding takes the `kube-state-metrics` ClusterRole (which contains all
+#   the read-only permissions) and grants it to the `kube-state-metrics`
+#   ServiceAccount. The `kube-state-metrics` pod runs as this ServiceAccount,
+#   thereby inheriting the necessary permissions to function.
+#
+# ==============================================================================
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-state-metrics
+  labels:
+    component: kube-state-metrics
+# `roleRef`: This specifies which role is being granted.
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  # It refers to the `kube-state-metrics` ClusterRole defined in the other file.
+  name: kube-state-metrics
+# `subjects`: This specifies who is being granted the role.
+subjects:
+- kind: ServiceAccount
+  # The permissions are granted to the `kube-state-metrics` ServiceAccount...
+  name: kube-state-metrics
+  # ...which exists in the `infrastructure` namespace.
+  namespace: infrastructure

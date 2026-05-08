@@ -1,3 +1,31 @@
+# ==============================================================================
+#
+#               Redpanda Console - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for Redpanda Console (formerly Kowl),
+#   a modern, stateless web UI for managing and exploring Apache Kafka.
+#
+# Why Redpanda Console?
+#   -   It's lightweight, stateless, and provides a very intuitive developer
+#       experience for browsing topics, messages, consumer groups, and more.
+#   -   It has built-in support for connecting to Kafka, Schema Registry, and
+#       Kafka Connect, providing a single pane of glass for the core components.
+#
+# Configuration Method:
+#   Redpanda Console is configured via a single YAML file. This deployment mounts
+#   a ConfigMap (generated from `console-config.yaml.tpl` by the Taskfile) into
+#   the container at the path specified by the `CONFIG_FILEPATH` environment variable.
+#
+# Templating:
+#   The image tag and resource limits will be patched by the `local` Kustomize
+#   overlay from `config.yaml`. The ConfigMap volume itself is also defined in
+#   the overlay.
+#
+# ==============================================================================
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,7 +41,10 @@ spec:
   template:
     metadata:
       annotations:
-        # Increment this value to force a redeployment when the configmap changes
+        # This annotation is a common pattern to trigger a rolling update of the
+        # deployment whenever the associated ConfigMap is updated. If the content
+        # of the ConfigMap changes, you can increment this version number in the
+        # overlay to force the pods to restart and pick up the new configuration.
         config-version: "2"
       labels:
         app: redpanda-console
@@ -21,13 +52,16 @@ spec:
     spec:
       containers:
       - name: redpanda-console
+        # The image will be patched by Kustomize from `images_redpanda_console_full`.
         image: docker.redpanda.com/redpandadata/console:v3.7.1
         ports:
-        - containerPort: 8080
+        - containerPort: 8080 # The default port for the Redpanda Console UI.
           name: http
         env:
+        # Tells the application where to find its configuration file inside the container.
         - name: CONFIG_FILEPATH
           value: /etc/redpanda/config.yaml
+        # Resource allocations will be patched by the `local` overlay. Redpanda Console is very lightweight.
         resources:
           requests:
             cpu: "10m"
@@ -36,9 +70,13 @@ spec:
             cpu: "10m"
             memory: "64Mi"
         volumeMounts:
+        # Mounts the ConfigMap containing `config.yaml` into the specified directory.
         - name: redpanda-console-config
           mountPath: /etc/redpanda
       volumes:
+      # Defines the volume that will be backed by the ConfigMap.
       - name: redpanda-console-config
         configMap:
+          # The name of the ConfigMap to mount. This ConfigMap is created by the
+          # `local` overlay from the rendered `redpanda-console-config.yaml` file.
           name: redpanda-console-config

@@ -1,4 +1,16 @@
-# --- Strimzi Replacements ---
+# ==============================================================================
+#
+#               Kustomize Replacements - Strimzi Operator
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines the Kustomize `replacements` for the Strimzi Operator
+#   Deployment itself.
+#
+# ==============================================================================
+
+# --- Strimzi Operator Image ---
 - source:
     fieldPath: data.images_strimzi_operator_full
     kind: ConfigMap

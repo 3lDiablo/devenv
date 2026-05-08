@@ -1,10 +1,28 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Strimzi Operator
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` overlay for the Strimzi Operator
+#   component. Its primary purpose is to include the base manifests for the
+#   operator and apply a consistent `component: strimzi` label.
+#
+#   The actual patching (e.g., setting resource limits) is handled by the
+#   `replacements` defined in the top-level `overlays/local/kustomization.yaml`.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# Adds a common label to all resources related to the Strimzi operator.
 labels:
 - includeSelectors: true
   pairs:
     component: strimzi
 
+# Includes the base manifests for the Strimzi Operator.
 resources:
   - ../../../../base/kafka/operator

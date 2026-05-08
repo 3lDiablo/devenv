@@ -1,0 +1,139 @@
+# ==============================================================================
+#
+#               OpenTelemetry Collector - Configuration
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines the behavior of the OpenTelemetry (OTel) Collector through
+#   a series of pipelines. An OTel pipeline consists of three main parts:
+#
+#   1.  Receivers: How data gets into the Collector. This can be from applications
+#       sending OTLP data, or the collector can actively pull data, for example
+#       by scraping a Prometheus endpoint.
+#   2.  Processors: What happens to the data after it's received. This can include
+#       batching, adding metadata (like Kubernetes pod names), or filtering.
+#   3.  Exporters: Where the processed data is sent. This could be a monitoring
+#       backend like Prometheus, Jaeger, or a cloud service.
+#
+# Role in this Stack:
+#   This configuration is a bit unusual but demonstrates a powerful capability.
+#   It's configured to use a `prometheus` receiver to scrape all the application
+#   metrics itself. It then processes them and exports them via a `prometheus`
+#   exporter. The main Prometheus server is then configured to scrape *this*
+#   exporter. This sets up the OTel Collector as a central metrics aggregator
+#   and processor.
+#
+# ==============================================================================
+
+# --- RECEIVERS ---
+# Defines how data gets into the Collector.
+receivers:
+  # This receiver makes the OTel Collector behave like a Prometheus server.
+  # It will scrape other endpoints based on the provided scrape_configs.
+  prometheus:
+    config:
+      scrape_configs:
+        # Job 1: Scrape the OTel Collector's own internal metrics.
+        - job_name: 'otel-collector'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['0.0.0.0:OTEL_METRICS_PORT']
+
+        # Job 2: Discover and scrape application pods using Kubernetes Service Discovery.
+        # This configuration largely duplicates the main prometheus.yml, showing how
+        # the collector can take over the role of primary scraper if desired.
+        - job_name: 'kubernetes-pods'
+          scrape_interval: 10s
+          kubernetes_sd_configs:
+            - role: pod
+          relabel_configs:
+            # Filter to keep only pods with a 'component' label for our services.
+            - source_labels: [__meta_kubernetes_pod_label_component]
+              action: keep
+              regex: (KAFKA_NAME|kafka-nodepool|postgres|schema-registry|redpanda|kube-state-metrics)
+            
+            # Rewrite the scrape address to use the correct metrics port for each component.
+            - source_labels: [__meta_kubernetes_pod_label_component, __address__]
+              action: replace
+              regex: (KAFKA_NAME|kafka-nodepool);([^:]+)(?::\d+)?
+              replacement: $2:KAFKA_METRICS_PORT
+              target_label: __address__
+            - source_labels: [__meta_kubernetes_pod_label_component, __address__]
+              action: replace
+              regex: postgres;([^:]+)(?::\d+)?
+              replacement: $2:POSTGRES_METRICS_PORT
+              target_label: __address__
+            - source_labels: [__meta_kubernetes_pod_label_component, __address__]
+              action: replace
+              regex: (schema-registry|redpanda|kube-state-metrics);([^:]+)(?::\d+)?
+              replacement: $2:COMMON_METRICS_PORT
+              target_label: __address__
+
+            # Add useful metadata as labels.
+            - source_labels: [__meta_kubernetes_namespace]
+              target_label: namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              target_label: pod
+            - source_labels: [__meta_kubernetes_pod_label_component]
+              target_label: component
+            - source_labels: [__meta_kubernetes_pod_label_component]
+              target_label: job
+
+# --- PROCESSORS ---
+# Defines how data is processed within the Collector.
+processors:
+  # Batches data before exporting to improve efficiency.
+  batch:
+  # Prevents the collector from consuming excessive memory.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 70
+    spike_limit_percentage: 30
+  # Detects resource information from the environment (e.g., cloud provider).
+  resourcedetection:
+    detectors: [env]
+    timeout: 2s
+  # Automatically adds Kubernetes metadata (like pod name, namespace, etc.) as attributes to the data.
+  k8sattributes:
+    auth_type: "serviceAccount"
+    passthrough: false
+    extract:
+      metadata:
+        - k8s.pod.name
+        - k8s.pod.uid
+        - k8s.deployment.name
+        - k8s.namespace.name
+        - k8s.node.name
+        - k8s.pod.start_time
+    pod_association:
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.name
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.ip
+      - sources:
+          - from: connection
+
+# --- EXPORTERS ---
+# Defines where the processed data is sent.
+exporters:
+  # Exposes an endpoint (`:OTEL_EXPORTER_PORT/metrics`) that a Prometheus server can scrape.
+  prometheus:
+    endpoint: "0.0.0.0:OTEL_EXPORTER_PORT"
+    resource_to_telemetry_conversion:
+      enabled: false
+  # A useful debugging exporter that prints data to the console.
+  debug:
+    verbosity: detailed
+
+# --- SERVICE ---
+# Defines the pipelines that connect receivers, processors, and exporters.
+service:
+  pipelines:
+    # This defines the pipeline for metrics.
+    metrics:
+      receivers: [prometheus] # Data comes from the prometheus receiver.
+      processors: [memory_limiter, k8sattributes, batch] # It's processed in this order.
+      exporters: [prometheus, debug] # And then sent to the prometheus and debug exporters.

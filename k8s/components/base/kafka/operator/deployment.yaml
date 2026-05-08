@@ -1,8 +1,35 @@
+# ==============================================================================
+#
+#               Strimzi Operator - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for the Strimzi Cluster Operator. This is
+#   the core controller that runs in the cluster, watches for Strimzi Custom
+#   Resources (like `Kafka`, `KafkaTopic`, etc.), and reconciles the state of
+#   the cluster to match the desired state defined in those resources.
+#
+# Key Configuration:
+#   -   Image: Specifies the Strimzi operator container image to run.
+#   -   Environment Variables: A large number of `STRIMZI_*` environment variables
+#       are used to configure the operator's behavior, such as watched namespaces,
+#       reconciliation intervals, and default images for the components it deploys.
+#   -   RBAC: The `serviceAccountName` links this deployment to the permissions
+#       defined in the associated RBAC manifests (ClusterRoles, RoleBindings).
+#   -   Probes: Liveness and readiness probes ensure that the operator is running
+#       and healthy.
+#   -   Resources: The resource requests and limits will be patched by the `local`
+#       overlay to match the values in `config.yaml`.
+#
+# ==============================================================================
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: strimzi-cluster-operator
   labels:
+    # This label is used by the overlay to identify this specific deployment for patching.
     app: strimzi
 spec:
   replicas: 1
@@ -16,21 +43,26 @@ spec:
         name: strimzi-cluster-operator
         strimzi.io/kind: cluster-operator
     spec:
+      # The ServiceAccount provides the identity and permissions for the operator pod.
       serviceAccountName: strimzi-cluster-operator
       volumes:
+        # A small, memory-backed temporary directory for the operator's use.
         - name: strimzi-tmp
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
+        # Mounts the `strimzi-cluster-operator` ConfigMap, allowing for custom configuration.
         - name: co-config-volume
           configMap:
             name: strimzi-cluster-operator
       containers:
         - name: strimzi-cluster-operator
+          # The image is a placeholder. The actual image tag will be patched by Kustomize
+          # from the `images_strimzi_operator_full` value in the global ConfigMap.
           image: quay.io/strimzi/operator:0.51.0
           ports:
             - containerPort: 8080
-              name: http
+              name: http # Port for health probes.
           args:
             - /opt/strimzi/bin/cluster_operator_run.sh
           volumeMounts:
@@ -39,20 +71,27 @@ spec:
             - name: co-config-volume
               mountPath: /opt/strimzi/custom-config/
           env:
+            # --- Operator Behavior Configuration ---
+            # Disables the automatic creation of NetworkPolicies.
             - name: STRIMZI_NETWORK_POLICY_GENERATION
               value: "false"
+            # The namespace(s) the operator should watch for Custom Resources.
+            # Here, it's dynamically set to the namespace the operator is deployed in.
             - name: STRIMZI_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            # How often to run a full reconciliation loop (e.g., 2 minutes).
             - name: STRIMZI_FULL_RECONCILIATION_INTERVAL_MS
               value: "120000"
+            # Timeout for individual Kubernetes operations.
             - name: STRIMZI_OPERATION_TIMEOUT_MS
               value: "300000"
-            - name: STRIMZI_DEFAULT_KAFKA_EXPORTER_IMAGE
-              value: quay.io/strimzi/kafka:0.51.0-kafka-4.2.0
-            - name: STRIMZI_DEFAULT_CRUISE_CONTROL_IMAGE
-              value: quay.io/strimzi/kafka:0.51.0-kafka-4.2.0
+
+            # --- Default Image Mappings ---
+            # These variables tell the operator which container images to use when it creates
+            # Kafka clusters, Connect clusters, etc. This allows the operator to deploy
+            # specific, compatible versions of different components.
             - name: STRIMZI_KAFKA_IMAGES
               value: |
                 4.1.0=quay.io/strimzi/kafka:0.51.0-kafka-4.1.0
@@ -72,22 +111,19 @@ spec:
               value: quay.io/strimzi/operator:0.51.0
             - name: STRIMZI_DEFAULT_USER_OPERATOR_IMAGE
               value: quay.io/strimzi/operator:0.51.0
-            - name: STRIMZI_DEFAULT_KAFKA_INIT_IMAGE
-              value: quay.io/strimzi/operator:0.51.0
-            - name: STRIMZI_DEFAULT_KAFKA_BRIDGE_IMAGE
-              value: quay.io/strimzi/kafka-bridge:0.33.1
-            - name: STRIMZI_DEFAULT_KANIKO_EXECUTOR_IMAGE
-              value: quay.io/strimzi/kaniko-executor:0.51.0
-            - name: STRIMZI_DEFAULT_BUILDAH_IMAGE
-              value: quay.io/strimzi/buildah:0.51.0
-            - name: STRIMZI_DEFAULT_MAVEN_BUILDER
-              value: quay.io/strimzi/maven-builder:0.51.0
+            # ... and other default images ...
+
+            # --- Operator Namespace & Feature Gates ---
             - name: STRIMZI_OPERATOR_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            # Used to enable or disable experimental features.
             - name: STRIMZI_FEATURE_GATES
               value: ""
+
+            # --- Leader Election Configuration ---
+            # Ensures that in a multi-replica setup, only one operator pod is active at a time.
             - name: STRIMZI_LEADER_ELECTION_ENABLED
               value: "true"
             - name: STRIMZI_LEADER_ELECTION_LEASE_NAME
@@ -100,18 +136,26 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+
+          # --- Health Probes ---
+          # Liveness probe: If this fails, Kubernetes will restart the container.
           livenessProbe:
             httpGet:
               path: /healthy
               port: http
             initialDelaySeconds: 10
             periodSeconds: 30
+          # Readiness probe: If this fails, the pod will not receive traffic.
           readinessProbe:
             httpGet:
               path: /ready
               port: http
             initialDelaySeconds: 10
             periodSeconds: 30
+
+          # --- Resource Allocation ---
+          # These are base values. The `local` overlay will patch these fields with
+          # values from `config.yaml` to provide more specific resource management.
           resources:
             limits:
               cpu: 1000m

@@ -1,0 +1,39 @@
+# ==============================================================================
+#
+#               Kustomize - OpenTelemetry Collector Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the resources for deploying the OTel
+#   Collector, including its Deployment, Service, and RBAC permissions.
+#
+#   It uses a `configMapGenerator` to create the main configuration ConfigMap
+#   from the `otel-collector-config.yaml` file.
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ------------------------------------------------------------------------------
+# § Component Resources
+# ------------------------------------------------------------------------------
+resources:
+  - deployment.yaml
+  - service.yaml
+  - serviceaccount.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml
+
+# ------------------------------------------------------------------------------
+# § ConfigMap Generator
+# ------------------------------------------------------------------------------
+configMapGenerator:
+  - name: otel-collector-conf # The name of the ConfigMap to be created.
+    files:
+      # Use the template as the default source for the base.
+      - otel-collector-config.yaml=otel-collector-config.yaml.tpl
+    options:
+      labels:
+        component: otel-collector

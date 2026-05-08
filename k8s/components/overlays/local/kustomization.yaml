@@ -1,10 +1,53 @@
+# ==============================================================================
+#
+#               Kustomize - 'local' Overlay
+#
+# ==============================================================================
+#
+# Overview:
+#   This is the main Kustomization file for the `local` overlay. An overlay takes a
+#   `base` Kustomization and applies environment-specific customizations to it.
+#   This file is the entrypoint for building the final, deployable manifests for
+#   the local development environment.
+#
+# How It Works:
+#   1.  It implicitly references the `../../base` Kustomization, inheriting all of its
+#       resources.
+#   2.  It sets a common `namespace` for all resources.
+#   3.  It adds additional `resources`, such as the `values.yaml` ConfigMap (which
+#       contains all the values from `config.yaml`) and component-specific patches.
+#   4.  It uses `replacements` (a Kustomize feature) to perform targeted variable
+#       substitutions, injecting values from the `values.yaml` ConfigMap into the
+#       base manifests.
+#   5.  It adds an `env: local` label to all resources to identify them as part of
+#       the local environment.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# ------------------------------------------------------------------------------
+# § Namespace
+#   Specifies the Kubernetes namespace where all resources will be deployed.
+#   This isolates the development environment from other potential applications
+#   in the cluster (like `kube-system`).
+# ------------------------------------------------------------------------------
 namespace: infrastructure
 
+# ------------------------------------------------------------------------------
+# § Resources
+#   Lists the resources to be added or patched in this overlay. Kustomize merges
+#   these with the resources from the `base`.
+# ------------------------------------------------------------------------------
 resources:
+  # This is the generated ConfigMap containing all key-value pairs from `config.yaml`.
+  # It serves as the source for all variable replacements.
   - values.yaml
+
+  # These directories contain Kustomize patches specific to each component for the
+  # `local` environment. For example, the `postgres` directory might contain a
+  # patch to set the image tag or resource limits.
   - common
   - kafka
   - postgres
@@ -13,7 +56,15 @@ resources:
   - redpanda
   - karapace
   - cloudbeaver
+  - telemetry
 
+# ------------------------------------------------------------------------------
+# § Replacements
+#   This is the core mechanism for injecting configuration values. Kustomize's
+#   `replacements` feature allows you to source a value from one resource (the
+#   `values.yaml` ConfigMap) and inject it into a field in another resource.
+#   Each file listed here defines a set of these replacement rules.
+# ------------------------------------------------------------------------------
 replacements:
   - path: replacements/postgres.yaml
   - path: replacements/kafka.yaml
@@ -23,8 +74,14 @@ replacements:
   - path: replacements/karapace.yaml
   - path: replacements/cloudbeaver.yaml
   - path: replacements/kafka-operator.yaml
+  - path: replacements/telemetry.yaml
 
+# ------------------------------------------------------------------------------
+# § Labels
+#   Applies additional labels to all resources in this overlay.
+# ------------------------------------------------------------------------------
 labels:
-- includeSelectors: false
-  pairs:
-    env: local
+  - includeSelectors: false # `false` is used to avoid altering workload selectors.
+    pairs:
+      # This label clearly marks every resource as belonging to the 'local' environment.
+      env: local

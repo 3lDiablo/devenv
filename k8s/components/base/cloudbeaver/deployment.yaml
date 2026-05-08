@@ -1,3 +1,25 @@
+# ==============================================================================
+#
+#               CloudBeaver - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for CloudBeaver, a web-based universal
+#   database manager. It's used in this environment to provide a lightweight UI
+#   for interacting with the PostgreSQL database.
+#
+# Configuration Method:
+#   CloudBeaver is configured primarily through files mounted into the container.
+#   The `Taskfile`'s `render:cloudbeaver` task creates ConfigMaps from templates,
+#   and the `local` Kustomize overlay mounts these as volumes into the pod.
+#
+# Templating:
+#   The image tag and resource limits are placeholders that will be patched by the
+#   `local` overlay from `config.yaml`.
+#
+# ==============================================================================
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,23 +28,33 @@ metadata:
   labels:
     component: cloudbeaver
 spec:
+  # `replicas`: Specifies the desired number of pod instances. For a local
+  # development UI, 1 is sufficient.
   replicas: 1
+  # `selector`: This tells the Deployment which pods to manage. It finds pods
+  # that have the label `app: cloudbeaver`. This must match the labels in the
+  # pod template below.
   selector:
     matchLabels:
       app: cloudbeaver
+  # `template`: This is the blueprint for the pods that the Deployment will create.
   template:
     metadata:
+      # `labels`: The labels applied to each pod created from this template. The
+      # `selector` from the Deployment spec above uses these labels to find its pods.
       labels:
         app: cloudbeaver
         component: cloudbeaver
     spec:
       containers:
       - name: cloudbeaver
+        # The image will be patched by Kustomize from `images_cloudbeaver_full`.
         image: dbeaver/cloudbeaver:26.0.2
         ports:
-        - containerPort: 8978
+        - containerPort: 8978 # The default port for the CloudBeaver web UI.
           name: http
-        env: []
+        env: [] # Configuration is file-based, not via environment variables.
+        # Resource allocations will be patched by the `local` overlay.
         resources:
           requests:
             cpu: "100m"
@@ -30,11 +62,9 @@ spec:
           limits:
             cpu: "100m"
             memory: "128Mi"
-        volumeMounts:
-        - name: global-connections-volume
-          mountPath: /opt/cloudbeaver/workspace/GlobalConfiguration/.dbeaver/data-sources.json
-          subPath: data-sources.json
-      volumes:
-      - name: global-connections-volume
-        configMap:
-          name: cloudbeaver-global-connections-config
+        # `volumeMounts`: The `local` overlay will add entries here to mount the
+        # rendered configuration files into the appropriate paths inside the container.
+        volumeMounts: []
+      # `volumes`: The `local` overlay will define the ConfigMap volumes here that
+      # are referenced by the `volumeMounts`.
+      volumes: []

@@ -1,7 +1,31 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Kafka Component Aggregator
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file acts as an aggregator for the `local` overlay of the
+#   Kafka component. It doesn't apply patches itself but instead directs Kustomize
+#   to the subdirectories (`operator`, `cluster`, etc.) where the actual patches
+#   for each part of the Kafka deployment are defined.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+# ------------------------------------------------------------------------------
+# § Overlay Resources
+#   Lists the sub-directories containing the Kustomize overlays for each piece
+#   of the Strimzi Kafka deployment.
+# ------------------------------------------------------------------------------
 resources:
+  # Contains patches for the Strimzi Cluster Operator Deployment.
   - operator
+  # Contains patches for the main `Kafka` Custom Resource.
   - cluster
+  # Contains patches for the `broker` KafkaNodePool.
   - broker
+  # Contains patches for the `controller` KafkaNodePool.
   - controller

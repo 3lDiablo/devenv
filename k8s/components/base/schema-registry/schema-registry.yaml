@@ -1,3 +1,29 @@
+# ==============================================================================
+#
+#               Apicurio Schema Registry - Deployment & Service
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest deploys the Apicurio Schema Registry, a service for managing
+#   and validating schemas (Avro, JSON Schema, Protobuf) for Kafka topics.
+#
+# Why Apicurio?
+#   -   It is lightweight and open source.
+#   -   It uses a standard SQL database (PostgreSQL in this case) for its storage
+#       backend, which is often simpler to manage and inspect in a development
+#       environment compared to using a Kafka topic for storage.
+#   -   It provides a Confluent Schema Registry-compatible API, making it a
+#       drop-in replacement for many existing tools and clients.
+#
+# Templating:
+#   The image tag, resource limits, database credentials, JVM options, and service
+#   `nodePort` are all placeholders. They will be patched by the `local` Kustomize
+#   overlay using values sourced from `config.yaml`.
+#
+# ==============================================================================
+
+# --- Deployment ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,10 +32,6 @@ metadata:
   labels:
     component: schema-registry
 spec:
-  # APICURIO REGISTRY: Manages Avro, JSON Schema, and Protobuf definitions.
-  # WHY APICURIO? It is lightweight, Open Source, and uses a standard SQL 
-  # database (Postgres) for storage, avoiding the complexity of Kafka-based storage 
-  # for local development.
   replicas: 1
   selector:
     matchLabels:
@@ -22,23 +44,34 @@ spec:
     spec:
       containers:
       - name: apicurio
-        image: quay.io/apicurio/apicurio-registry-sql:2.6.x-release
+        # The image will be patched by Kustomize from `images_schema_registry_full`.
+        image: quay.io/apicurio/apicurio-registry-sql:2.6.13.Final
         ports:
-        - containerPort: 8080
+        - containerPort: 8080 # Apicurio runs on port 8080 by default.
           name: http
         env:
-        # STORAGE: Connected to the internal Postgres instance.
+        # --- Storage Configuration ---
+        # These environment variables configure Apicurio to use the PostgreSQL
+        # database deployed in the cluster. The values are placeholders and will
+        # be patched by Kustomize to use the correct credentials from `config.yaml`.
         - name: QUARKUS_DATASOURCE_JDBC_URL
           value: "jdbc:postgresql://postgres:5432/postgres"
         - name: QUARKUS_DATASOURCE_USERNAME
           value: "postgres"
         - name: QUARKUS_DATASOURCE_PASSWORD
           value: "postgres"
-        # JAVA CONFIG: Memory is auto-sized by Taskfile, but we provide defaults.
+
+        # --- Java Configuration ---
+        # The JVM heap settings will be patched by Kustomize. The Taskfile
+        # auto-calculates these values based on the container's memory limit.
         - name: JAVA_OPTIONS
           value: "-Xms128m -Xmx128m"
+        # A specific date format setting for the registry's API.
         - name: REGISTRY_APIS_V2_DATE_FORMAT
           value: "yyyy-MM-dd'T'HH:mm:ss'Z'"
+
+        # --- Resource Allocation ---
+        # These are base values and will be patched by the `local` overlay.
         resources:
           requests:
             cpu: "100m"
@@ -47,6 +80,7 @@ spec:
             cpu: "100m"
             memory: "128Mi"
 ---
+# --- Service ---
 apiVersion: v1
 kind: Service
 metadata:
@@ -55,12 +89,15 @@ metadata:
   labels:
     component: schema-registry
 spec:
-  # EXPOSURE: NodePort 30081 provides Confluent-compatible schema registry API.
+  # `type: NodePort` exposes the service outside the cluster for development access.
   type: NodePort
   ports:
-  - port: 8081
-    targetPort: 8080
+  - port: 8081 # The service's internal port. Other pods connect to `schema-registry:8081`.
+    targetPort: 8080 # The port on the Apicurio pod to forward traffic to.
     name: http
+    # The external port on the node. This will be patched by Kustomize from
+    # `config.yaml` to ensure it matches the Kind port mapping.
     nodePort: 30081
   selector:
+    # Routes traffic to pods with the label `app: schema-registry`.
     app: schema-registry

@@ -1,5 +1,23 @@
+# ==============================================================================
+#
+#               Kustomize - Karapace REST Proxy Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the Kubernetes resources required to
+#   deploy the Karapace REST Proxy. It acts as a self-contained "component"
+#   that is included in the main base aggregator.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+# ------------------------------------------------------------------------------
+# § Component Resources
+#   Lists the raw Kubernetes manifests that make up the Karapace component.
+# ------------------------------------------------------------------------------
 resources:
   - deployment.yaml
   - service.yaml

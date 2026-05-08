@@ -1,75 +1,76 @@
-# --- Kafka Connect Replacements ---
+# ==============================================================================
+#
+#               Kustomize Replacements - Kafka Connect
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines the Kustomize `replacements` for the Strimzi Kafka Connect
+#   cluster. It maps values from the `global-values` ConfigMap to the appropriate
+#   fields in the base `KafkaConnect` Custom Resource and its associated Service.
+#
+# ==============================================================================
+
+# --- Kafka Connect NodePort ---
 - source:
-    fieldPath: data.cluster_ports_3_node
+    fieldPath: data.cluster_ports_3_node # The index `3` corresponds to the `kafka-connect` entry.
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.ports.0.nodePort
-    select:
-      kind: Service
-      name: kafka-connect-api
+  - fieldPaths: [spec.ports.0.nodePort]
+    select: {kind: Service, name: kafka-connect-api}
+
+# --- Kafka Connect Port ---
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_kafka_connect_port
   targets:
-    - select:
-        kind: Service
-        name: kafka-connect-api
-      fieldPaths:
-        - spec.ports.0.port
+  - select: {kind: Service, name: kafka-connect-api}
+    fieldPaths: [spec.ports.0.port]
+
+# --- Kafka Connect Resources ---
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_kafka_connect_resources_cpu_request
   targets:
-    - select:
-        kind: KafkaConnect
-        name: kafka-connect
-      fieldPaths: [spec.resources.requests.cpu]
+  - select: {kind: KafkaConnect, name: kafka-connect}
+    fieldPaths: [spec.resources.requests.cpu]
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_kafka_connect_resources_cpu_limit
   targets:
-    - select:
-        kind: KafkaConnect
-        name: kafka-connect
-      fieldPaths: [spec.resources.limits.cpu]
+  - select: {kind: KafkaConnect, name: kafka-connect}
+    fieldPaths: [spec.resources.limits.cpu]
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_kafka_connect_resources_memory_request
   targets:
-    - select:
-        kind: KafkaConnect
-        name: kafka-connect
-      fieldPaths: [spec.resources.requests.memory]
+  - select: {kind: KafkaConnect, name: kafka-connect}
+    fieldPaths: [spec.resources.requests.memory]
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_kafka_connect_resources_memory_limit
   targets:
-    - select:
-        kind: KafkaConnect
-        name: kafka-connect
-      fieldPaths: [spec.resources.limits.memory]
+  - select: {kind: KafkaConnect, name: kafka-connect}
+    fieldPaths: [spec.resources.limits.memory]
+
+# --- Kafka Connect JVM Options ---
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_kafka_connect_jvm_xms
   targets:
-    - select:
-        kind: KafkaConnect
-        name: kafka-connect
-      fieldPaths: ["spec.jvmOptions.-Xms"]
+  - select: {kind: KafkaConnect, name: kafka-connect}
+    fieldPaths: ["spec.jvmOptions.-Xms"]
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_kafka_connect_jvm_xmx
   targets:
-    - select:
-        kind: KafkaConnect
-        name: kafka-connect
-      fieldPaths: ["spec.jvmOptions.-Xmx"]
+  - select: {kind: KafkaConnect, name: kafka-connect}
+    fieldPaths: ["spec.jvmOptions.-Xmx"]

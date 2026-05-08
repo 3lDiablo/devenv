@@ -1,0 +1,45 @@
+# ==============================================================================
+#
+#               Kustomize - Telemetry Stack Aggregator
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the resources for the environment's
+#   observability and telemetry stack. This stack is designed to be lightweight
+#   to respect the resource constraints of a local development machine.
+#
+# The stack includes:
+#   -   Prometheus: For metrics collection, storage, and querying.
+#   -   Grafana: For metrics visualization and dashboards.
+#   -   OpenTelemetry Collector: To receive, process, and export telemetry data
+#       (though its role here is primarily for metrics).
+#   -   Kube State Metrics: A service that generates metrics about the state of
+#       Kubernetes objects (e.g., deployments, pods).
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ------------------------------------------------------------------------------
+# § Component Resources
+#   Lists the sub-directories containing the manifests for each part of the
+#   telemetry stack.
+# ------------------------------------------------------------------------------
+resources:
+  # The OpenTelemetry Collector can receive metrics in various formats and
+  # export them to backends like Prometheus.
+  - otel-collector
+
+  # Prometheus is the time-series database that will scrape and store metrics
+  # from all the services in the cluster.
+  - prometheus
+
+  # Grafana provides the visualization layer, with dashboards for exploring
+  # the metrics collected by Prometheus.
+  - grafana
+
+  # Kube State Metrics generates valuable metrics about the health, status, and
+  # count of Kubernetes API objects, which are then scraped by Prometheus.
+  - kube-state-metrics

@@ -1,3 +1,32 @@
+# ==============================================================================
+#
+#               Karapace REST Proxy - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for Karapace, which provides a RESTful
+#   proxy for Apache Kafka.
+#
+# Why Karapace?
+#   -   While Strimzi has a `KafkaBridge` component, Karapace is chosen here
+#       because it also supports schema-aware message production (both JSON and
+#       binary formats), a feature the bridge lacks.
+#   -   It can act as both a Schema Registry and a REST Proxy. While we use
+#       Apicurio for the registry, Karapace's REST proxy capabilities are valuable.
+#
+# Configuration Method:
+#   This deployment runs Karapace in a unified mode (`karapace.karapace_all`),
+#   where it's configured by a primary JSON configuration file. The `Taskfile`
+#   renders this configuration from a template, and the `local` overlay mounts
+#   it into the pod as a ConfigMap volume.
+#
+# Templating:
+#   The image tag, resource limits, and ConfigMap volumes are managed by the
+#   `local` Kustomize overlay.
+#
+# ==============================================================================
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,8 +35,6 @@ metadata:
   labels:
     component: karapace
 spec:
-  # KARAPACE UNIFIED: Provides both a Confluent-compatible REST API and a Schema Registry.
-  # This deployment runs Karapace in a unified mode, configured via a single JSON file.
   replicas: 1
   selector:
     matchLabels:
@@ -20,19 +47,29 @@ spec:
     spec:
       containers:
       - name: karapace
+        # The image will be patched by Kustomize from `images_karapace_full`.
         image: ghcr.io/aiven/karapace:3.7.1
-        # Use direct module call to load our mounted config files.
+        # The command explicitly starts Karapace in its unified mode, pointing to the
+        # mounted configuration file.
         command: ["python3", "-m", "karapace.karapace_all", "/opt/karapace/etc/karapace.config.json"]
         ports:
-        - containerPort: 8082
+        - containerPort: 8082 # The port for the REST Proxy API.
           name: rest
+        env:
+        # This environment variable is also available for configuration, but file-based
+        # configuration is preferred for more complex setups.
+        - name: KARAPACE_PORT
+          value: "8082"
         volumeMounts:
+        # Mounts the main `karapace.config.json` file from a ConfigMap into the container.
         - name: config-volume
           mountPath: /opt/karapace/etc/karapace.config.json
-          subPath: karapace.config.json
+          subPath: karapace.config.json # `subPath` ensures it's mounted as a file, not a directory.
+        # Mounts a secondary configuration file.
         - name: rest-config-volume
           mountPath: /opt/karapace/etc/rest-proxy-karapace.config.json
           subPath: rest-proxy-karapace.config.json
+        # Resource allocations will be patched by the `local` overlay.
         resources:
           requests:
             cpu: "100m"
@@ -40,21 +77,28 @@ spec:
           limits:
             cpu: "100m"
             memory: "256Mi"
+        # --- Health Probes ---
         # Readiness probe checks if the REST API is ready to accept traffic.
         readinessProbe:
           httpGet:
-            path: /
+            path: / # The root path should return a 200 OK if the service is up.
             port: 8082
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         # Liveness probe checks if the Karapace process is still running and responsive.
         livenessProbe:
           httpGet:
             path: /
             port: 8082
-          initialDelaySeconds: 15
+          initialDelaySeconds: 30
           periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
       volumes:
+      # Defines the volumes that are backed by ConfigMaps. These ConfigMaps are
+      # created and named by the `local` Kustomize overlay.
       - name: config-volume
         configMap:
           name: karapace-config

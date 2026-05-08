@@ -1,4 +1,22 @@
-# CloudBeaver Service
+# ==============================================================================
+#
+#               CloudBeaver - Service Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a Service to expose the CloudBeaver deployment. It makes
+#   the web UI accessible from the host machine for development purposes.
+#
+# Key Features:
+#   -   NodePort Type: Exposes the service on a static port on the Kubernetes node.
+#       This port is then mapped to a `localhost` port by the Kind cluster
+#       configuration, making the UI available at `http://localhost:8978`.
+#   -   Templating: The `nodePort` value is a placeholder that will be patched by
+#       the `local` Kustomize overlay to match the value defined in `config.yaml`.
+#
+# ==============================================================================
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,10 +25,15 @@ metadata:
   labels:
     component: cloudbeaver
 spec:
+  # `type: NodePort` makes the service accessible from outside the cluster.
   type: NodePort
   ports:
-  - port: 8978
+  - # The service's internal port.
+    port: 8978
+    # The port on the CloudBeaver pod to forward traffic to.
     targetPort: 8978
+    # The external port on the node. This will be patched by Kustomize.
     nodePort: 30978
   selector:
+    # Routes traffic to pods with the label `app: cloudbeaver`.
     app: cloudbeaver

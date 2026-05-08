@@ -1,14 +1,49 @@
+# ==============================================================================
+#
+#               Strimzi - Kafka Node Pool (Brokers)
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a `KafkaNodePool` Custom Resource for the Kafka brokers.
+#   In Strimzi's KRaft (Zookeeper-less) mode, Node Pools are used to define groups
+#   of nodes that share a specific role and configuration.
+#
+#   This pool specifically defines the nodes that will have the `broker` role,
+#   meaning they are responsible for storing data partitions and handling
+#   produce/fetch requests.
+#
+# Key Features:
+#   -   Role-Based Configuration: Explicitly assigns the `broker` role to the nodes
+#       in this pool.
+#   -   Resource Management: Defines the CPU/memory resources and JVM options for
+#       the broker pods. These are placeholders that will be patched by the `local`
+#       overlay using values from `config.yaml`.
+#   -   Persistent Storage: Configures the storage for the brokers using a
+#       `persistent-claim`, ensuring that topic data is not lost if a pod restarts.
+#
+# ==============================================================================
+
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaNodePool
 metadata:
-  name: brokers
+  name: broker # The name of the node pool.
   namespace: infrastructure
   labels:
     component: kafka-nodepool
+    # This label is crucial. It associates this Node Pool with the `Kafka`
+    # resource named `kafka-cluster`. The `Kafka` resource will be patched
+    # to have this same name.
     strimzi.io/cluster: kafka-cluster
 spec:
+  # The number of broker pods to create. This will be patched from `config.yaml`.
   replicas: 1
-  roles: [broker]
+  # The roles assigned to nodes in this pool. Here, it's just the `broker` role.
+  roles:
+    - broker
+  # --- Resource Allocation ---
+  # These are base values. The `local` overlay will patch these with more specific
+  # values from `config.yaml` (`settings.kafka.resources.*`).
   resources:
     requests:
       cpu: "100m"
@@ -16,13 +51,22 @@ spec:
     limits:
       cpu: "100m"
       memory: "128Mi"
+  # --- JVM Options ---
+  # These options are for the Kafka broker's Java Virtual Machine.
+  # The `-Xms` (initial heap size) and `-Xmx` (maximum heap size) values will be
+  # patched by the overlay. The Taskfile includes logic to auto-calculate these
+  # based on the pod's memory limit to prevent OOM errors.
   jvmOptions:
-    -Xms: "128m"
-    -Xmx: "128m"
+    "-Xms": "128m"
+    "-Xmx": "128m"
+  # --- Storage Configuration ---
   storage:
+    # `jbod` (Just a Bunch of Disks) allows for configuring one or more volumes.
     type: jbod
     volumes:
-      - id: 0
-        type: persistent-claim
-        size: 10Gi 
+      - id: 0 # A unique ID for the volume within the JBOD array.
+        type: persistent-claim # Use a PersistentVolumeClaim for durable storage.
+        size: 10Gi # The size of the persistent volume to request.
+        # `deleteClaim: false` ensures that the PVC (and its data) is not deleted
+        # when the Kafka cluster is deleted. This prevents accidental data loss.
         deleteClaim: false

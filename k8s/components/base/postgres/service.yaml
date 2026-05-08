@@ -1,3 +1,27 @@
+# ==============================================================================
+#
+#               PostgreSQL - Service Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a Service for the PostgreSQL deployment. A Service provides
+#   a stable network endpoint (a consistent IP address and DNS name) for a set of
+#   pods. This allows other applications within the cluster to connect to the
+#   database without needing to know the specific IP addresses of the individual pods.
+#
+# Key Features:
+#   - NodePort Type: Exposes the service on a static port on each node in the
+#     cluster. This, combined with the port mapping in the Kind configuration,
+#     makes the database accessible from the host machine (e.g., on `localhost:5432`).
+#   - Multiple Ports: Exposes both the main PostgreSQL port (5432) for database
+#     connections and the metrics port (9187) for Prometheus scraping.
+#   - Templating: The `nodePort` is a placeholder. It will be patched by Kustomize
+#     using the `$(cluster_ports_postgres_node)` variable from the global ConfigMap,
+#     ensuring it matches the value in `config.yaml`.
+#
+# ==============================================================================
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -6,11 +30,32 @@ metadata:
   labels:
     component: postgres
 spec:
+  # `type: NodePort` makes the service accessible from outside the cluster at a
+  # specific port on any node. This is ideal for a local development setup.
   type: NodePort
   selector:
+    # This selector tells the service to route traffic to any pod with the label `app: postgres`.
+    # This matches the pods created by the PostgreSQL Deployment.
     app: postgres
   ports:
+    # --- Main Database Port ---
     - name: tcp-postgres
+      # `port`: The port the service exposes internally within the cluster.
+      # Other pods will connect to `postgres:5432`.
       port: 5432
+      # `targetPort`: The port on the pod that the traffic should be sent to.
       targetPort: 5432
+      # `nodePort`: The static port on the node where the service is exposed.
+      # This value is a placeholder and will be patched by Kustomize to match `config.yaml`.
       nodePort: 30432
+
+    # --- Metrics Port ---
+    # This port exposes the `/metrics` endpoint of the `postgres-exporter` sidecar.
+    # NOTE: Port 9187 is hardcoded in the exporter image and is non-configurable.
+    - name: metrics
+      # `port`: The port the service exposes for metrics. Prometheus will be configured
+      # to scrape `postgres:9187`.
+      port: 9187
+      # `targetPort`: The port on the sidecar container that is serving the metrics.
+      targetPort: 9187
+      # Note: This port does not need a `nodePort` as it's only accessed internally by Prometheus.

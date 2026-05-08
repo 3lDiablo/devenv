@@ -1,0 +1,86 @@
+# ==============================================================================
+#
+#               Prometheus - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for the Prometheus server, the core of
+#   the metrics collection system. Prometheus is responsible for scraping metrics
+#   from various endpoints, storing them in a time-series database, and making
+#   them available for querying via its own UI or for visualization in Grafana.
+#
+# Configuration Method:
+#   Prometheus is configured via a YAML file (`prometheus.yml`). This deployment
+#   mounts a ConfigMap containing this configuration file into the pod. The
+#   `--config.file` argument tells the Prometheus process where to find it.
+#
+# Storage:
+#   For this local development environment, an `emptyDir` volume is used for
+#   Prometheus's time-series database (TSDB) storage. This means that all metrics
+#   data is ephemeral and will be lost if the pod is restarted. This is an
+#   acceptable trade-off to keep the local setup simple and avoid the need for
+#   persistent volumes for metrics.
+#
+# Templating:
+#   The image tag and resource limits will be patched by the `local` Kustomize
+#   overlay from `config.yaml`.
+#
+# ==============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: infrastructure
+  labels:
+    component: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        component: prometheus
+    spec:
+      # The ServiceAccount is linked to RBAC roles that allow Prometheus to discover
+      # services and pods in the cluster for scraping (service discovery).
+      serviceAccountName: prometheus
+      containers:
+      - name: prometheus
+        # The image will be patched by Kustomize from `images_prometheus_full`.
+        image: quay.io/prometheus/prometheus:v2.54.1
+        args:
+        # Tells Prometheus where to find its main configuration file.
+        - "--config.file=/etc/prometheus/prometheus.yml"
+        # Tells Prometheus where to store its time-series data.
+        - "--storage.tsdb.path=/prometheus"
+        ports:
+        - containerPort: 9090 # The default port for the Prometheus web UI and API.
+          name: web
+        # Resource allocations will be patched by the `local` overlay.
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        volumeMounts:
+        # Mounts the configuration volume into the container.
+        - name: prometheus-config-vol
+          mountPath: /etc/prometheus
+        # Mounts the storage volume into the container.
+        - name: prometheus-storage-vol
+          mountPath: /prometheus
+      volumes:
+      # Defines the volume that is backed by the Prometheus ConfigMap.
+      - name: prometheus-config-vol
+        configMap:
+          name: prometheus-conf # This ConfigMap is defined in the `prometheus` kustomization.
+      # Defines the ephemeral storage volume. Data written here will be lost on pod restart.
+      - name: prometheus-storage-vol
+        emptyDir: {}

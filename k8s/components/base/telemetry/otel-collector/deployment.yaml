@@ -1,0 +1,83 @@
+# ==============================================================================
+#
+#               OpenTelemetry Collector - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for the OpenTelemetry (OTel) Collector.
+#   The OTel Collector is a flexible component that can receive, process, and
+#   export telemetry data (metrics, logs, and traces).
+#
+# Role in this Stack:
+#   In this specific environment, the OTel Collector's primary role is to act as
+#   a standardized endpoint for applications that might want to send telemetry
+#   data using the OpenTelemetry Protocol (OTLP). It is configured to receive
+#   data and then export it in a format that Prometheus can understand. While no
+#   application is configured to send data to it by default, it's included as a
+#   best-practice component for a modern observability stack.
+#
+# Configuration Method:
+#   The collector is configured via a single YAML file, which is mounted into the
+#   pod from a ConfigMap. The `--config` argument points the process to this file.
+#
+# ==============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: infrastructure
+  labels:
+    component: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+        component: otel-collector
+    spec:
+      # The ServiceAccount is linked to permissions that might be needed for discovery or other advanced features.
+      serviceAccountName: otel-collector
+      containers:
+      - name: otel-collector
+        # The `contrib` version of the collector includes many more components than the base version.
+        # The image will be patched by Kustomize from `images_otel_collector_full`.
+        image: otel/opentelemetry-collector-contrib:0.111.0
+        args:
+        # Tells the collector where to find its configuration file.
+        - "--config=/conf/otel-collector-config.yaml"
+        # Resource allocations will be patched by the `local` overlay.
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        ports:
+        # The standard port for receiving OTLP data over gRPC.
+        - containerPort: 4317
+          name: otlp-grpc
+        # Port for the collector to expose its own internal metrics.
+        - containerPort: 8888
+          name: metrics
+        # Port where the collector exposes data in Prometheus format.
+        - containerPort: 8889
+          name: prom-export
+        volumeMounts:
+        # Mounts the configuration volume into the `/conf` directory.
+        - name: otel-collector-config-vol
+          mountPath: /conf
+      volumes:
+      # Defines the volume that is backed by the OTel Collector ConfigMap.
+      - name: otel-collector-config-vol
+        configMap:
+          name: otel-collector-conf
+          items:
+            - key: otel-collector-config.yaml
+              path: otel-collector-config.yaml
