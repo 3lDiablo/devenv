@@ -1,0 +1,32 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - OpenTelemetry Collector
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` overlay for the OTel Collector.
+#   Its primary purpose is to include the base manifests.
+#
+#   The actual patching (e.g., setting resource limits, image tag) is handled
+#   by the `replacements` defined in the top-level `telemetry.yaml` replacement
+#   file.
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Includes the base manifests for the OTel Collector.
+resources:
+  - ../../../../base/telemetry/otel-collector
+
+# Override the base ConfigMap generator to use the rendered configuration.
+configMapGenerator:
+  - name: otel-collector-conf
+    behavior: replace
+    files:
+      - otel-collector-config.yaml
+    options:
+      labels:
+        component: otel-collector

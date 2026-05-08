@@ -1,0 +1,33 @@
+# ==============================================================================
+#
+#               Kustomize - Grafana Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the resources for deploying Grafana.
+#   It includes the Deployment and Service. It also uses a `configMapGenerator` 
+#   to create the dashboard provider configuration.
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# ------------------------------------------------------------------------------
+# § Component Resources
+# ------------------------------------------------------------------------------
+resources:
+  - deployment.yaml
+  - service.yaml
+# ------------------------------------------------------------------------------
+# § ConfigMap Generator
+#   This generator creates the ConfigMap for the dashboard provider.
+# ------------------------------------------------------------------------------
+configMapGenerator:
+  - name: grafana-providers # The name of the ConfigMap to be created.
+    files:
+      # The content of `providers.yaml` will be used to create the ConfigMap data.
+      - providers.yaml
+    options:
+      labels:
+        component: grafana

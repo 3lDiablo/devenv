@@ -1,0 +1,33 @@
+:root > * {
+  --md-primary-fg-color: #635bff;
+  --md-primary-fg-color--light: #8079ff;
+  --md-primary-fg-color--dark: #4b44d1;
+  --md-accent-fg-color: #00d4ff;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 230;
+  --md-primary-fg-color: #635bff;
+  --md-default-bg-color: #0d1117;
+  --md-default-fg-color: #c9d1d9;
+  --md-code-bg-color: #161b22;
+}
+
+/* Make admonitions look more professional */
+.md-typeset .admonition,
+.md-typeset details {
+  border-width: 0 0 0 4px;
+  border-radius: 4px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-left-color: #635bff;
+}
+
+.md-typeset .admonition-title,
+.md-typeset summary {
+  font-weight: 700;
+  background-color: rgba(99, 91, 255, 0.05);
+}

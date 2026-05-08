@@ -1,7 +1,31 @@
-# Base: Postgres
+# ==============================================================================
+#
+#               Kustomize - PostgreSQL Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the Kubernetes resources required to
+#   deploy a single instance of PostgreSQL. It acts as a self-contained "component"
+#   that can be included in the main base aggregator.
+#
+#   This modular approach makes the system easier to understand and manage, as all
+#   resources related to PostgreSQL are grouped together in this directory.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# ------------------------------------------------------------------------------
+# § Component Resources
+#   Lists the raw Kubernetes manifests that make up the PostgreSQL component.
+# ------------------------------------------------------------------------------
 resources:
+  # The Deployment manifest defines the pod template for running the PostgreSQL
+  # container, including its image, environment variables, and resource requests.
   - deployment.yaml
+
+  # The Service manifest exposes the PostgreSQL deployment within the cluster
+  # so that other services (like Apicurio Schema Registry) can connect to it.
   - service.yaml

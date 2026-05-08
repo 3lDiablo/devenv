@@ -1,17 +1,40 @@
+# ==============================================================================
+#
+#               Karapace REST Proxy - Service Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a Service to expose the Karapace REST Proxy deployment.
+#   It makes the REST API accessible from the host machine for development and testing.
+#
+# Key Features:
+#   -   NodePort Type: Exposes the service on a static port on the Kubernetes node.
+#       This port is then mapped to a `localhost` port by the Kind cluster
+#       configuration, making the API available at `http://localhost:8082`.
+#   -   Templating: The `nodePort` value is a placeholder that will be patched by
+#       the `local` Kustomize overlay to match the value defined in `config.yaml`.
+#
+# ==============================================================================
+
 apiVersion: v1
 kind: Service
 metadata:
-  name: rest-proxy
+  name: karapace
   namespace: infrastructure
   labels:
     component: karapace
 spec:
-  # EXPOSURE: NodePort allows host-side applications to access the REST Proxy.
+  # `type: NodePort` makes the service accessible from outside the cluster.
   type: NodePort
   ports:
-  - port: 8082
+  - # The service's internal port.
+    port: 8082
+    # The port on the Karapace pod to forward traffic to.
     targetPort: 8082
     name: rest
-    nodePort: 30082 # This will be replaced by kustomize
+    # The external port on the node. This will be patched by Kustomize.
+    nodePort: 30082
   selector:
+    # Routes traffic to pods with the label `app: karapace`.
     app: karapace

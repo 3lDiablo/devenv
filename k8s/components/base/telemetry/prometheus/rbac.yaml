@@ -1,0 +1,82 @@
+# ==============================================================================
+#
+#               Prometheus - RBAC Manifests
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines all the Role-Based Access Control (RBAC) resources needed
+#   by the Prometheus server to function correctly. It includes:
+#
+#   1.  ServiceAccount: An identity for the Prometheus pod within the cluster.
+#   2.  ClusterRole: A set of cluster-wide, read-only permissions.
+#   3.  ClusterRoleBinding: Grants the permissions from the ClusterRole to the
+#       ServiceAccount.
+#
+# Permissions Rationale:
+#   Prometheus uses Kubernetes Service Discovery (`kubernetes_sd_configs`) to
+#   automatically find and scrape targets. To do this, it needs permission to
+#   `get`, `list`, and `watch` various resources (like pods, services, and nodes)
+#   from the Kubernetes API server. These permissions are read-only and are
+#   essential for a modern, cloud-native monitoring setup.
+#
+# ==============================================================================
+
+# --- ServiceAccount ---
+# Provides a dedicated identity for the Prometheus pod.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: infrastructure
+  labels:
+    component: prometheus
+---
+# --- ClusterRole ---
+# Defines the permissions needed by Prometheus.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+  labels:
+    component: prometheus
+rules:
+# Grants read-only access to the following resources, which are used for service discovery.
+- apiGroups: [""]
+  resources:
+  - nodes           # To discover nodes for scraping Kubelet and cAdvisor metrics.
+  - nodes/metrics   # A sub-resource for node-level metrics.
+  - services        # To discover service endpoints.
+  - endpoints       # To find the pods backing a service.
+  - pods            # To discover pods directly.
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources:
+  - jobs            # To discover and monitor batch jobs.
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["config.openshift.io"] # For OpenShift-specific cluster version metrics.
+  resources:
+  - clusterversions
+  verbs: ["get"]
+# Allows Prometheus to access non-resource URL paths, like the main `/metrics` endpoint.
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+# --- ClusterRoleBinding ---
+# Grants the permissions in the ClusterRole to the ServiceAccount.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+  labels:
+    component: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  # Binds the 'prometheus' ClusterRole defined above...
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  # ...to the 'prometheus' ServiceAccount in the 'infrastructure' namespace.
+  name: prometheus
+  namespace: infrastructure

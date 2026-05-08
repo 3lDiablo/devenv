@@ -1,16 +1,40 @@
-# Redpanda Console Service
+# ==============================================================================
+#
+#               Redpanda Console - Service Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a Service to expose the Redpanda Console deployment.
+#   It makes the web UI accessible from the host machine for development.
+#
+# Key Features:
+#   -   NodePort Type: Exposes the service on a static port on the Kubernetes node.
+#       This port is then mapped to a `localhost` port by the Kind cluster
+#       configuration, making the UI available at `http://localhost:8080`.
+#   -   Templating: The `nodePort` value is a placeholder that will be patched by
+#       the `local` Kustomize overlay to match the value defined in `config.yaml`.
+#
+# ==============================================================================
+
 apiVersion: v1
 kind: Service
 metadata:
   name: redpanda-console
   namespace: infrastructure
   labels:
+    # Using standard Kubernetes labels to indicate the component's role.
     app.kubernetes.io/part-of: kafka-console
 spec:
+  # `type: NodePort` makes the service accessible from outside the cluster.
   type: NodePort
   ports:
-  - port: 8080
+  - # The service's internal port.
+    port: 8080
+    # The port on the Redpanda Console pod to forward traffic to.
     targetPort: 8080
-    nodePort: 30080 # Placeholder
+    # The external port on the node. This will be patched by Kustomize.
+    nodePort: 30080
   selector:
+    # Routes traffic to pods with the label `app: redpanda-console`.
     app: redpanda-console

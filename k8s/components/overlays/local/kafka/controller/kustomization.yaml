@@ -1,8 +1,29 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Kafka Controller NodePool
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file defines the `local` overlay for the `controller`
+#   KafkaNodePool. Its primary purpose is to include the base manifest for the
+#   controller pool and apply a consistent label.
+#
+#   The actual patching (e.g., setting resource limits, replicas, JVM options)
+#   is handled by the `replacements` defined in the top-level
+#   `overlays/local/kustomization.yaml`.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+# Adds a common label to the KafkaNodePool resource.
 labels:
 - includeSelectors: true
   pairs:
     component: kafka-nodepool
+
+# Includes the base manifest for the controller KafkaNodePool.
 resources:
   - ../../../../base/kafka/controller

@@ -1,8 +1,25 @@
-# Base: Kafka Connect
+# ==============================================================================
+#
+#               Kustomize - Kafka Connect Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the Kubernetes resources required to
+#   deploy a Strimzi-managed Kafka Connect cluster. It acts as a self-contained
+#   "component" that is included in the main base aggregator.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
+# Applies common transformation rules, such as allowing variable replacements
+# in the NodePort field of the service.
 configurations:
   - kustomize-config.yaml
+# ------------------------------------------------------------------------------
+# § Component Resources
+#   Lists the raw Kubernetes manifests that make up the Kafka Connect component.
+# ------------------------------------------------------------------------------
 resources:
   - kafka-connect.yaml

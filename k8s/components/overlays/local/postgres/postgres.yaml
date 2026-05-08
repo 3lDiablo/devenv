@@ -1,11 +1,46 @@
-- op: add
+# ==============================================================================
+#
+#               Kustomize Patch - PostgreSQL Deployment
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines a patch for the base PostgreSQL Deployment. It uses the
+#   JSON Patch format (`op`, `path`, `value`) to make specific, targeted changes
+#   to the Deployment manifest.
+#
+#   The purpose of this patch is to mount the `postgres-init-scripts` ConfigMap
+#   (which contains `init-db.sql`) into a special directory in the official
+#   Postgres container.
+#
+# How It Works:
+#   The official PostgreSQL Docker image will automatically execute any `.sh` or
+#   `.sql` files it finds in the `/docker-entrypoint-initdb.d` directory upon
+#   the first time the container is started. This patch mounts our init script
+#   into that exact directory, providing a clean, declarative way to initialize
+#   the database with schemas or data.
+#
+# ==============================================================================
+
+# --- Patch 1: Add a new volume to the Deployment ---
+# This is a JSON Patch operation.
+- op: add # The operation is to add a new element.
+  # The path to the array where the new element should be added.
+  # `/spec/template/spec/volumes/-` means "add an item to the end of the volumes array".
   path: /spec/template/spec/volumes/-
+  # The value to add. This defines a new volume named `init-db-volume` that
+  # is backed by the `postgres-init-scripts` ConfigMap.
   value:
     name: init-db-volume
     configMap:
       name: postgres-init-scripts
+
+# --- Patch 2: Mount the new volume into the container ---
 - op: add
+  # This path means "add an item to the end of the volumeMounts array of the first container".
   path: /spec/template/spec/containers/0/volumeMounts/-
+  # The value to add. This mounts the `init-db-volume` into the magic
+  # `/docker-entrypoint-initdb.d` directory.
   value:
     name: init-db-volume
     mountPath: /docker-entrypoint-initdb.d

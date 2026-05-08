@@ -1,73 +1,68 @@
-# Local Development Environment
+# Kubernetes Local Development Environment
 
-A professional-grade, lightweight, and declarative local development environment based on a single-node **Kubernetes (Kind)** cluster.
+A high-fidelity, single-node Kubernetes development environment engineered for cloud-native engineers. This project leverages **Kind** (Kubernetes in Docker) and a **Single Source of Truth (SSoT)** architecture to deliver a local experience that mirrors production-grade orchestration with minimal overhead.
 
-This project provides a reproducible, **production-like** foundation for engineers, starting with a core stack of Kafka and PostgreSQL, but designed for easy expansion. It is managed by a simple, unified command-line interface.
+## Core Architecture
 
----
+The environment is built on three pillars of modern platform engineering:
 
-## Features
+1.  **Declarative SSoT**: All configuration—including infrastructure resource limits, networking, and component versions—is centralized in `config.yaml`.
+2.  **Automated Lifecycle**: Orchestrated via [Go-Task](https://taskfile.dev/), the system replaces complex shell scripts with a dependency-aware execution pipeline.
+3.  **High-Fidelity Components**: Runs standard Kubernetes Operators (Strimzi) and CNCF-native observability stacks (OpenTelemetry) rather than simplified docker-compose alternatives.
 
-- **Declarative Architecture**: The entire environment is defined by a single `config.yaml` file. All configuration for the cluster, components, and services is derived from this single source of truth.
-- **Production-Like Kafka**: High-fidelity Kafka setup using the Strimzi operator in KRaft mode, with separated Controller and Broker NodePools.
-- **Native Localhost Access**: All primary services are exposed on `localhost` via Kubernetes NodePorts, eliminating the friction of `kubectl port-forward`.
-- **Persistent Data**: All stateful services (like PostgreSQL and Kafka) are backed by persistent volumes, ensuring data survives cluster restarts.
-- **Extensible & Modular**: New components can be easily added to the Kustomize base, and the build system will automatically incorporate them.
+## Integrated Stack
 
-## Core Components
+| Component | Technology | Role |
+| :--- | :--- | :--- |
+| **Orchestration** | `Kind` + `Kustomize` | K8s Control Plane & configuration management. |
+| **Kafka Stack** | `Strimzi` + `Apicurio` | Enterprise-grade Kafka Operator & Schema Registry. |
+| **Database** | `PostgreSQL 17` | Robust relational backend for schemas and applications. |
+| **Telemetry** | `OTel` + `Prometheus` | Unified observability and metrics collection. |
+| **UIs** | `Redpanda Console` | Modern, stateless UI for Kafka stream exploration. |
+| **DB UI** | `CloudBeaver` | Lightweight, web-based database management. |
 
-The environment currently provisions the following services:
+## Quickstart: Zero-Friction Setup
 
-- **Streaming**: [Strimzi](https://strimzi.io/)-managed Apache Kafka
-- **Database**: PostgreSQL
-- **Kafka Management UI**: Redpanda Console
-- **Database UI**: Cloudbeaver
+The environment is designed to be **self-bootstrapping**. You only need `go-task` installed to begin.
 
-## Architecture
+```bash
+# Initialize and launch the full environment
+task up
+```
 
-This project follows a "Declarative Architecture" where `config.yaml` is the single source of truth. An orchestration layer using `Taskfile` and `yq` renders this configuration into manifests that are then applied to the cluster using `kustomize`.
+!!! note "Self-Bootstrapping Dependencies"
+    Upon running `task up`, the system will automatically audit your workstation for required tools (`kind`, `kubectl`, `yq`, `jq`, etc.). If dependencies are missing, the task will offer to install them via Homebrew automatically.
 
-## Prerequisites
+### Common Operations
 
-You must have the following CLI tools installed on your system:
-- `docker` or `podman`
-- `kubectl`
-- `kind`
-- `task`
-- `yq`
+| Command | Action |
+| :--- | :--- |
+| `task status` | View real-time cluster health and resource usage (CPU/MEM). |
+| `task status:watch` | Continuous dashboard mode for cluster monitoring. |
+| `task render` | Regenerate K8s manifests from `config.yaml` templates. |
+| `task down` | Destructive teardown and cleanup of the environment. |
 
-You can run `task check-deps` to verify your setup.
+## SSoT Configuration (`config.yaml`)
 
-## Quick Start
+To modify the environment, edit the centralized `config.yaml`. The pipeline handles the heavy lifting of template rendering and deployment updates.
 
-1.  **Review Configuration**: Open `config.yaml` and adjust any settings as needed (e.g., change the container provider from `docker` to `podman`, or adjust `host` ports if they conflict with other local services).
-2.  **Start Environment**:
-    ```bash
-    task up
-    ```
-3.  **Wait**: The initial setup will take a few minutes as images are loaded and components are deployed and initialized.
-4.  **Access Services**: Once complete, services will be available on `localhost` at the ports defined in `config.yaml`.
+- **Resource Management**: Adjust `requests` and `limits` for any service. JVM heap sizes for Kafka are automatically calculated based on these values.
+- **Networking**: Manage host-to-cluster port mappings via the `cluster.ports` block.
+- **Versioning**: Centralized image tag management under the `images` section to avoid supply-chain fragmentation.
 
-## Commands
+## Accessing Services
 
-All project tasks are run via `Taskfile`. Run `task --list` for a full menu of available commands.
+Once initialized, services are exposed on `localhost` via NodePorts:
 
-- `task up`: Creates and starts the environment from scratch.
-- `task down`: Destroys the entire environment, including persistent data.
-- `task stop`: Pauses the environment by stopping the cluster containers.
-- `task start`: Resumes a paused environment.
-- `task status`: Checks the status of all pods in the cluster.
+- **Redpanda Console**: [http://localhost:8080](http://localhost:8080)
+- **CloudBeaver**: [http://localhost:8978](http://localhost:8978)
+- **Grafana**: [http://localhost:3000](http://localhost:3000)
+- **Prometheus**: [http://localhost:9090](http://localhost:9090)
 
-## Configuration
+## Technical Reference
 
-### Component Toggles
-You can easily activate or deactivate any service by toggling its `enabled` flag in `config.yaml` (e.g., `enabled: false`). 
-The `Taskfile` orchestration is strictly conditioned around these flags. Disabling a component will prevent its tasks from executing during `task up` and remove it from the runtime generation.
-
-### Port Mapping
-To expose a component perfectly from the Kubernetes virtual network to your native `localhost`, you simply define a `ports` block under the component in `config.yaml` with a `host` port and a `node` port (between 30000-32767).
-The orchestration pipeline will auto-detect the ports recursively, expose them dynamically in the Kind Node container configuration, and patch the respective Kubernetes Services via Kustomize.
-### Resource Management & Auto-Sizing
-To maintain a lightweight local footprint, you must explicitly declare Kubernetes `.resources` (`requests` & `limits`) for all components.
-
-You do **not** need to manually define Java JVM constraints (like `-Xmx`). The Taskfile pipeline automatically detects your defined Kubernetes memory limits and computes an optimized JVM heap boundary internally, capping Java components natively at 70% of the Kubernetes limit. This completely protects your laptop from OOM (Out Of Memory) issues while hiding the complexity of JVM tuning.
+For architectural deep-dives and advanced guides, see the internal documentation suite:
+- [Overview & Philosophy](./docs/index.md)
+- [Architecture & Core Concepts](./docs/architecture/index.md)
+- [Developer Guides](./docs/guides/index.md)
+- [Configuration Schema](./docs/reference/config-schema.md)

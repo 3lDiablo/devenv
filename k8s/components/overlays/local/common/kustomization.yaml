@@ -1,5 +1,23 @@
+# ==============================================================================
+#
+#               Kustomize Overlay - Common Resources
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles common resources that are shared across
+#   multiple components or are fundamental to the environment setup.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# ------------------------------------------------------------------------------
+# § Common Resources
+# ------------------------------------------------------------------------------
 resources:
+  # Includes the manifest that defines the `infrastructure` namespace. While the
+  # top-level overlay also sets the namespace for all resources, explicitly
+  # including the Namespace object ensures it is created.
   - namespace.yaml

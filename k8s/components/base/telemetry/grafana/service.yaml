@@ -1,0 +1,41 @@
+# ==============================================================================
+#
+#               Grafana - Service Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a Service to expose the Grafana deployment. It makes
+#   the web UI accessible from the host machine for development purposes.
+#
+# Key Features:
+#   -   NodePort Type: Exposes the service on a static port on the Kubernetes node.
+#       This port is then mapped to a `localhost` port by the Kind cluster
+#       configuration, making the UI available at `http://localhost:3000`.
+#   -   Templating: The `nodePort` value is a placeholder that will be patched by
+#       the `local` Kustomize overlay to match the value defined in `config.yaml`.
+#
+# ==============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: infrastructure
+  labels:
+    component: grafana
+spec:
+  # `type: NodePort` makes the service accessible from outside the cluster.
+  type: NodePort
+  # `selector`: Routes traffic to any pod with the label `app: grafana`, which
+  # matches the pods created by the Grafana Deployment.
+  selector:
+    app: grafana
+  ports:
+    - # `port`: The port the service exposes internally within the cluster.
+      # Other pods could connect to `grafana:3000`.
+      port: 3000
+      # `targetPort`: The port on the Grafana pod to forward traffic to.
+      targetPort: 3000
+      # `nodePort`: The external port on the node. This will be patched by Kustomize.
+      nodePort: 30300

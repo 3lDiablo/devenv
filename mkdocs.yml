@@ -1,0 +1,76 @@
+site_name: Kubernetes Local Dev Environment
+site_description: Comprehensive, product-grade documentation for our custom Kubernetes local development environment.
+site_author: Lead Cloud-Native Architect
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: custom
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: custom
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  custom_dir: docs/overrides
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - tables
+
+nav:
+  - Home: index.md
+  - 1. Architecture & Core Concepts:
+    - Overview: architecture/index.md
+    - CNCF & Open Source Philosophy: architecture/philosophy.md
+    - Kafka Stack Architecture: architecture/kafka-stack.md
+    - Telemetry & Observability: architecture/telemetry-stack.md
+    - Resource Management Strategy: architecture/resource-management.md
+    - Road to Production: architecture/production-path.md
+  - 2. Under the Hood (Internal Mechanics):
+    - The SSoT Rendering Pipeline: internals/ssot-pipeline.md
+    - Advanced Networking & Exposure: internals/networking.md
+    - Smart Image Management & OCI: internals/image-management.md
+    - Cluster Lifecycle Management: internals/lifecycle.md
+  - 3. Developer Guides & How-Tos:
+    - Overview: guides/index.md
+    - Tweaking the SSoT Configuration: guides/tweak-configuration.md
+    - Deploying a New Component: guides/add-component.md
+    - Real-World Interactions: guides/interactions.md
+    - Troubleshooting: guides/troubleshooting.md
+  - 4. Reference Manual:
+    - Overview: reference/index.md
+    - Taskfile Reference: reference/taskfile.md
+    - Environment Variables: reference/env-vars.md
+    - Configuration Schema: reference/config-schema.md

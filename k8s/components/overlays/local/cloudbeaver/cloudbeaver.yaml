@@ -8,7 +8,22 @@
           value: "postgres"
         - name: PGPASSWORD
           value: "postgres"
-      command: ['sh', '-c', 'until pg_isready -h postgres -p 5432 -U $(PGUSER) -d cloudbeaver; do echo "Waiting for cloudbeaver database..."; sleep 2; done;']
+      command: 
+        - 'sh'
+        - '-c'
+        - |
+          until pg_isready -h postgres -p 5432 -U $(PGUSER); do 
+            echo "Waiting for postgres..."; 
+            sleep 2; 
+          done;
+          if ! psql -h postgres -U $(PGUSER) -lqt | cut -d \| -f 1 | grep -qw cloudbeaver; then
+            echo "Database cloudbeaver does not exist. Creating..."
+            psql -h postgres -U $(PGUSER) -c "CREATE DATABASE cloudbeaver;"
+          fi
+- op: add
+  path: /spec/template/spec/securityContext
+  value:
+    runAsUser: 0
 - op: add
   path: /spec/template/spec/containers/0/env/-
   value:
@@ -18,28 +33,40 @@
   path: /spec/template/spec/containers/0/env/-
   value:
     name: CB_ADMIN_PASSWORD
-    value: "admin"
+    value: "CloudBeaver123!"
 - op: add
-  path: /spec/template/spec/volumes/-
+  path: /spec/template/spec/volumes
   value:
-    name: server-config-volume
-    configMap:
-      name: cloudbeaver-server-config
+    - name: server-config-volume
+      configMap:
+        name: cloudbeaver-server-config
+    - name: initial-data-volume
+      configMap:
+        name: cloudbeaver-initial-data-config
+    - name: product-config-volume
+      configMap:
+        name: cloudbeaver-product-config
+    - name: global-connections-volume
+      configMap:
+        name: cloudbeaver-global-connections-config
 - op: add
-  path: /spec/template/spec/volumes/-
+  path: /spec/template/spec/containers/0/volumeMounts
   value:
-    name: initial-data-volume
-    configMap:
-      name: cloudbeaver-initial-data-config
-- op: add
-  path: /spec/template/spec/containers/0/volumeMounts/-
-  value:
-    name: server-config-volume
-    mountPath: /opt/cloudbeaver/conf/cloudbeaver.conf
-    subPath: cloudbeaver.conf
-- op: add
-  path: /spec/template/spec/containers/0/volumeMounts/-
-  value:
-    name: initial-data-volume
-    mountPath: /opt/cloudbeaver/conf/initial-data.conf
-    subPath: initial-data.conf
+    - name: server-config-volume
+      mountPath: /opt/cloudbeaver/conf/cloudbeaver.conf
+      subPath: cloudbeaver.conf
+    - name: initial-data-volume
+      mountPath: /opt/cloudbeaver/conf/initial-data.conf
+      subPath: initial-data.conf
+    - name: initial-data-volume
+      mountPath: /opt/cloudbeaver/workspace/conf/initial-data.conf
+      subPath: initial-data.conf
+    - name: product-config-volume
+      mountPath: /opt/cloudbeaver/conf/product.conf
+      subPath: product.conf
+    - name: global-connections-volume
+      mountPath: /opt/cloudbeaver/conf/initial-data-sources.conf
+      subPath: initial-data-sources.conf
+    - name: global-connections-volume
+      mountPath: /opt/cloudbeaver/workspace/GlobalConfiguration/.dbeaver/data-sources.json
+      subPath: data-sources.json

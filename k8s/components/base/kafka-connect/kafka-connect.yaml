@@ -1,3 +1,30 @@
+# ==============================================================================
+#
+#               Strimzi - KafkaConnect Custom Resource & Service
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a `KafkaConnect` Custom Resource, which instructs the
+#   Strimzi Operator to deploy and manage a Kafka Connect cluster. Kafka Connect
+#   is a framework for streaming data between Apache Kafka and other systems.
+#
+#   This file also defines a `Service` to expose the Kafka Connect REST API,
+#   which is used to manage connectors (the plugins that do the actual work).
+#
+# Key Features:
+#   -   Strimzi-Managed: The entire lifecycle of the Kafka Connect cluster (pods,
+#       configuration, etc.) is managed by the Strimzi Operator based on this CR.
+#   -   Connector Management via CRs: The annotation `strimzi.io/use-connector-resources: "true"`
+#       enables the use of `KafkaConnector` Custom Resources, allowing connectors
+#       to be managed declaratively via `kubectl` and Kustomize.
+#   -   Templating: As with other components, key values (replicas, resources,
+#       JVM options, NodePort) are placeholders that will be patched by the `local`
+#       overlay from `config.yaml`.
+#
+# ==============================================================================
+
+# --- KafkaConnect Custom Resource ---
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnect
 metadata:
@@ -6,10 +33,17 @@ metadata:
   labels:
     component: kafka-connect
   annotations:
+    # This crucial annotation tells the Strimzi operator to enable the "connector operator".
+    # This allows you to manage individual connectors using `KafkaConnector` CRs,
+    # which is a much more powerful, declarative approach than using the REST API directly.
     strimzi.io/use-connector-resources: "true"
 spec:
+  # The Kafka Connect version. This will be patched by the overlay.
   version: 3.7.0
+  # The number of Kafka Connect worker pods. Patched from `config.yaml`.
   replicas: 1
+  # --- Resource Allocation ---
+  # Placeholders for CPU/memory requests and limits. Patched by the overlay.
   resources:
     requests:
       cpu: "100m"
@@ -17,19 +51,31 @@ spec:
     limits:
       cpu: "100m"
       memory: "128Mi"
+  # --- JVM Options ---
+  # Heap settings for the Kafka Connect worker JVMs. Patched by the overlay.
   jvmOptions:
-    -Xms: "128m"
-    -Xmx: "128m"
+    "-Xms": "128m"
+    "-Xmx": "128m"
+  # The address of the Kafka cluster to connect to.
   bootstrapServers: kafka-cluster-kafka-bootstrap:9092
+  # Enables the built-in Strimzi metrics reporter for Kafka Connect.
+  metricsConfig:
+    type: strimziMetricsReporter
+  # --- Internal Kafka Topics ---
+  # Kafka Connect uses several internal topics to store its configuration, offsets,
+  # and status. These settings define the names and replication factors for those topics.
+  # For a local dev setup, a replication factor of 1 is sufficient.
   groupId: connect-cluster
   configStorageTopic: connect-cluster-configs
   offsetStorageTopic: connect-cluster-offsets
   statusStorageTopic: connect-cluster-status
   config:
+    # Replication factors for the internal topics.
     config.storage.replication.factor: 1
     offset.storage.replication.factor: 1
     status.storage.replication.factor: 1
 ---
+# --- Kafka Connect API Service ---
 apiVersion: v1
 kind: Service
 metadata:
@@ -38,12 +84,16 @@ metadata:
   labels:
     component: kafka-connect
 spec:
+  # Expose the REST API via a NodePort for external management (e.g., by Redpanda Console).
   type: NodePort
   selector:
+    # Strimzi automatically labels the pods it creates, making them easy to select.
     strimzi.io/cluster: kafka-connect
     strimzi.io/kind: KafkaConnect
   ports:
     - name: rest
+      # The port for the Kafka Connect REST API.
       port: 8083
       targetPort: 8083
+      # The external port on the node. Patched by the overlay from `config.yaml`.
       nodePort: 30083

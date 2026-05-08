@@ -1,22 +1,73 @@
-# Infrastructure Base Aggregator
+# ==============================================================================
+#
+#               Kustomize - Base Aggregator
+#
+# ==============================================================================
+#
+# Overview:
+#   This file is the primary Kustomize entrypoint for the `base` layer. The `base`
+#   layer contains the raw, un-customized Kubernetes manifests for every service
+#   in the environment. These manifests are designed to be generic and environment-
+#   agnostic.
+#
+# How It Works:
+#   - It aggregates all the individual component directories (like `postgres`, `kafka`,
+#     `telemetry`, etc.) into a single, unified set of resources.
+#   - It applies a common configuration (`kustomize-config.yaml`) to all resources,
+#     which can define transformations like adding common labels or annotations.
+#   - It adds a global label (`app.kubernetes.io/managed-by: devenv`) to every
+#     resource, making it easy to identify and manage all objects created by this
+
+#     environment.
+#
+# Usage:
+#   This file is not meant to be applied directly to the cluster. Instead, it is
+#   referenced by an `overlay` Kustomization (e.g., `overlays/local/kustomization.yaml`),
+#   which then applies environment-specific patches and configurations.
+#
+# ==============================================================================
+
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Apply common rules to all components
+# ------------------------------------------------------------------------------
+# § Common Configurations
+#   Applies a common set of transformation rules to all resources aggregated here.
+# ------------------------------------------------------------------------------
 configurations:
+  # This file likely contains rules for things like naming conventions or adding
+  # common annotations, ensuring consistency across all components.
   - kustomize-config.yaml
 
+# ------------------------------------------------------------------------------
+# § Resource Aggregation
+#   Lists all the base component directories. Kustomize will recursively find all
+#   valid Kubernetes manifests within these paths and include them in the build.
+# ------------------------------------------------------------------------------
 resources:
-  - strimzi
-  - postgres
-  - kafka
-  - kafka-connect
-  - schema-registry
-  - redpanda
-  - karapace-rest
-  - cloudbeaver
+  # --- Core Infrastructure ---
+  - kafka/operator      # Strimzi Operator for managing Kafka clusters.
+  - postgres            # PostgreSQL database.
+  - kafka               # Kafka cluster components (NodePools, Cluster definition).
+  - kafka-connect       # Kafka Connect for external system integration.
+  - schema-registry     # Apicurio Schema Registry for schema management.
 
+  # --- User Interfaces & Proxies ---
+  - redpanda            # Redpanda Console (Web UI for Kafka).
+  - karapace            # Karapace REST Proxy for Kafka.
+  - cloudbeaver         # CloudBeaver (Web UI for PostgreSQL).
+
+  # --- Observability ---
+  - telemetry           # Telemetry stack (Prometheus, Grafana, OTel Collector).
+
+# ------------------------------------------------------------------------------
+# § Global Labels
+#   Applies a set of common labels to every single resource managed by this
+#   Kustomization. This is extremely useful for querying and managing resources.
+# ------------------------------------------------------------------------------
 labels:
-- includeSelectors: true
+- includeSelectors: true # This ensures that the labels are also applied to selectors in Deployments, Services, etc.
   pairs:
+    # This label clearly marks all resources as being managed by this local
+    # development environment, preventing conflicts with other potential tools.
     app.kubernetes.io/managed-by: devenv

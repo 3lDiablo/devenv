@@ -1,41 +1,117 @@
-apiVersion: kafka.strimzi.io/v1
+# ==============================================================================
+#
+#               Strimzi - Kafka Custom Resource
+#
+# ==============================================================================
+#
+# Overview:
+#   This is the most important manifest for the Kafka deployment. It defines a
+#   `Kafka` Custom Resource, which tells the Strimzi Operator what kind of Kafka
+#   cluster to create and manage. This declarative approach simplifies Kafka
+#   management immensely.
+#
+# Key Features:
+#   -   KRaft Mode: This configuration specifies a KRaft-based (Zookeeper-less)
+#       Kafka cluster. The roles of brokers and controllers are managed by
+#       `KafkaNodePools` instead of being defined here.
+#   -   Listeners: It configures how clients can connect to Kafka. An `internal`
+#       listener is defined for services within the Kubernetes cluster, and a
+#       `nodeport` listener is defined for external access from the host machine.
+#   -   Entity Operator: It enables the Topic Operator and User Operator, which
+#       allow you to manage Kafka topics and users declaratively using
+#       `KafkaTopic` and `KafkaUser` Custom Resources.
+#   -   Templating: Key values like `version`, `metadataVersion`, and `nodePort`
+#       are placeholders that will be patched by the `local` Kustomize overlay
+#       from the `config.yaml` source of truth.
+#
+# ==============================================================================
+
+apiVersion: kafka.strimzi.io/v1 # Use the v1 API for modern Strimzi features.
 kind: Kafka
 metadata:
+  # The name of the Kafka cluster. This will be patched by the overlay.
   name: kafka-cluster
   namespace: infrastructure
   labels:
     component: kafka-cluster
 spec:
-  # KAFKA CLUSTER CONFIGURATION
-  # Why Strimzi? It provides a production-grade operator for Kafka.
-  # This manifest defines a KRaft-based cluster (no Zookeeper).
+  # ------------------------------------------------------------------------------
+  # § Kafka Cluster Configuration
+  # ------------------------------------------------------------------------------
   kafka:
+    # The Kafka version to deploy. This will be patched from `config.yaml`.
     version: 4.2.0
+    # The KRaft metadata version. Must be compatible with the Kafka version. Patched from `config.yaml`.
     metadataVersion: 4.2-IV1
+
+    # --- Listeners ---
+    # Defines the network endpoints for connecting to Kafka.
     listeners:
-      # Internal listener for applications running inside the cluster.
+      # `plain` listener for internal cluster communication (e.g., from Schema Registry).
       - name: plain
         port: 9092
         type: internal
-        tls: false
-      # External listener via NodePort for development on the host machine.
+        tls: false # TLS is disabled for simplicity in this local dev environment.
+
+      # `external` listener for access from outside the Kubernetes cluster (e.g., your IDE).
       - name: external
-        port: 9093
-        type: nodeport
+        port: 9093 # This is the internal port number for this listener.
+        type: nodeport # Exposes Kafka via a Service of type NodePort.
         tls: false
         configuration:
           bootstrap:
+            # The specific NodePort to use for the bootstrap service. This value is
+            # patched by Kustomize from `config.yaml` to ensure it matches the
+            # port mapping in the Kind cluster configuration.
             nodePort: 30092
+
+    # --- Kafka Broker Configuration ---
+    # These are standard Kafka broker properties (`server.properties`).
     config:
-      # Local Dev Optimizations: minimize replication for single-node efficiency.
+      # Local Development Optimizations:
+      # For a single-node local cluster, we force replication factor and min in-sync
+      # replicas to 1. This ensures the cluster remains operational without needing
+      # multiple broker pods, saving significant resources.
       offsets.topic.replication.factor: 1
       transaction.state.log.replication.factor: 1
       transaction.state.log.min.isr: 1
-      default.replication.factor: 1
+      default.replication.factor: 1 # Default for topics that don't specify it.
       min.insync.replicas: 1
+
+      # Enables automatic topic creation on the broker when a producer sends a
+      # message to a non-existent topic. Convenient for development.
       auto.create.topics.enable: true
+      # Default number of partitions for auto-created topics. Patched from `config.yaml`.
       num.partitions: 6
-  # ENTITY OPERATOR: Automates creation of KafkaTopics and KafkaUsers via K8s CRDs.
+
+    # --- Metrics Configuration ---
+    # Enables the built-in Strimzi metrics reporter, which exposes a rich set of
+    # Kafka metrics that can be scraped by Prometheus.
+    metricsConfig:
+      type: strimziMetricsReporter
+
+  # ------------------------------------------------------------------------------
+  # § Entity Operator
+  #   A sub-component of Strimzi that manages Kafka topics and users via CRDs.
+  # ------------------------------------------------------------------------------
   entityOperator:
+    # The Topic Operator watches for `KafkaTopic` Custom Resources and creates/updates
+    # topics in Kafka accordingly. This is the foundation of the declarative topic
+    # management used in the `definitions/` directory.
     topicOperator: {}
+    # The User Operator watches for `KafkaUser` Custom Resources and manages
+    # Kafka users and their ACLs.
     userOperator: {}
+    # Resource requests and limits for the Entity Operator pod will be patched here.
+    template:
+      pod:
+        metadata:
+          labels:
+            component: kafka-entity-operator
+
+  # --- Kafka Exporter ---
+  # Deploys the Kafka Exporter to provide additional metrics (e.g., consumer group lag)
+  # to Prometheus and Grafana.
+  kafkaExporter:
+    topicRegex: ".*"
+    groupRegex: ".*"

@@ -1,117 +1,91 @@
-# --- Cloudbeaver Replacements ---
+# ==============================================================================
+#
+#               Kustomize Replacements - CloudBeaver
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines the Kustomize `replacements` for the CloudBeaver UI.
+#   It maps values from the `global-values` ConfigMap to the appropriate fields
+#   in the base Deployment and Service manifests.
+#
+# ==============================================================================
+
+# --- CloudBeaver InitContainer Credentials ---
+# These credentials are used by an initContainer (added by a patch) to perform
+# initial setup or configuration tasks.
 - source:
     fieldPath: data.settings_postgres_user
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.template.spec.initContainers.0.env.0.value
-    select:
-      kind: Deployment
-      name: cloudbeaver
+  - fieldPaths: [spec.template.spec.initContainers.0.env.0.value]
+    select: {kind: Deployment, name: cloudbeaver}
 - source:
     fieldPath: data.settings_postgres_password
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.template.spec.initContainers.0.env.1.value
-    select:
-      kind: Deployment
-      name: cloudbeaver
+  - fieldPaths: [spec.template.spec.initContainers.0.env.1.value]
+    select: {kind: Deployment, name: cloudbeaver}
+
+# --- CloudBeaver NodePort ---
 - source:
-    fieldPath: data.settings_cloudbeaver_admin_user
+    fieldPath: data.cluster_ports_6_node # The index `6` corresponds to the `cloudbeaver` entry.
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.template.spec.containers.0.env.0.value
-    select:
-      kind: Deployment
-      name: cloudbeaver
-- source:
-    fieldPath: data.settings_cloudbeaver_admin_password
-    kind: ConfigMap
-    name: global-values
-  targets:
-  - fieldPaths:
-    - spec.template.spec.containers.0.env.1.value
-    select:
-      kind: Deployment
-      name: cloudbeaver
-- source:
-    fieldPath: data.cluster_ports_6_node
-    kind: ConfigMap
-    name: global-values
-  targets:
-  - fieldPaths:
-    - spec.ports.0.nodePort
-    select:
-      kind: Service
-      name: cloudbeaver
+  - fieldPaths: [spec.ports.0.nodePort]
+    select: {kind: Service, name: cloudbeaver}
+
+# --- CloudBeaver Image ---
 - source:
     fieldPath: data.images_cloudbeaver_full
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.template.spec.containers.0.image
-    select:
-      kind: Deployment
-      name: cloudbeaver
+  - fieldPaths: [spec.template.spec.containers.0.image]
+    select: {kind: Deployment, name: cloudbeaver}
+
+# --- CloudBeaver Port ---
 - source:
     fieldPath: data.settings_cloudbeaver_port
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.template.spec.containers.0.ports.0.containerPort
-    select:
-      kind: Deployment
-      name: cloudbeaver
-  - fieldPaths:
-    - spec.ports.0.port
-    select:
-      kind: Service
-      name: cloudbeaver
-  - fieldPaths:
-    - spec.ports.0.targetPort
-    select:
-      kind: Service
-      name: cloudbeaver
+  - fieldPaths: [spec.template.spec.containers.0.ports.0.containerPort]
+    select: {kind: Deployment, name: cloudbeaver}
+  - fieldPaths: [spec.ports.0.port]
+    select: {kind: Service, name: cloudbeaver}
+  - fieldPaths: [spec.ports.0.targetPort]
+    select: {kind: Service, name: cloudbeaver}
+
+# --- CloudBeaver Resources ---
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_cloudbeaver_resources_cpu_request
   targets:
-    - select:
-        kind: Deployment
-        name: cloudbeaver
-      fieldPaths: [spec.template.spec.containers.0.resources.requests.cpu]
+  - select: {kind: Deployment, name: cloudbeaver}
+    fieldPaths: [spec.template.spec.containers.0.resources.requests.cpu]
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_cloudbeaver_resources_cpu_limit
   targets:
-    - select:
-        kind: Deployment
-        name: cloudbeaver
-      fieldPaths: [spec.template.spec.containers.0.resources.limits.cpu]
+  - select: {kind: Deployment, name: cloudbeaver}
+    fieldPaths: [spec.template.spec.containers.0.resources.limits.cpu]
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_cloudbeaver_resources_memory_request
   targets:
-    - select:
-        kind: Deployment
-        name: cloudbeaver
-      fieldPaths: [spec.template.spec.containers.0.resources.requests.memory]
+  - select: {kind: Deployment, name: cloudbeaver}
+    fieldPaths: [spec.template.spec.containers.0.resources.requests.memory]
 - source:
     kind: ConfigMap
     name: global-values
     fieldPath: data.settings_cloudbeaver_resources_memory_limit
   targets:
-    - select:
-        kind: Deployment
-        name: cloudbeaver
-      fieldPaths: [spec.template.spec.containers.0.resources.limits.memory]
+  - select: {kind: Deployment, name: cloudbeaver}
+    fieldPaths: [spec.template.spec.containers.0.resources.limits.memory]

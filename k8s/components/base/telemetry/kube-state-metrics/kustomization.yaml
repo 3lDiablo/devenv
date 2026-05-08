@@ -1,0 +1,26 @@
+# ==============================================================================
+#
+#               Kustomize - Kube State Metrics Component
+#
+# ==============================================================================
+#
+# Overview:
+#   This Kustomization file bundles all the resources for deploying the
+#   `kube-state-metrics` service. This includes the Deployment, a Service to
+#   expose the metrics endpoint, and the necessary RBAC permissions for it to
+#   read object state from the Kubernetes API.
+#
+# ==============================================================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ------------------------------------------------------------------------------
+# § Component Resources
+# ------------------------------------------------------------------------------
+resources:
+  - deployment.yaml
+  - service.yaml
+  - serviceaccount.yaml
+  - clusterrole.yaml
+  - clusterrolebinding.yaml

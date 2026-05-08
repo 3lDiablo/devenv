@@ -1,0 +1,64 @@
+# ==============================================================================
+#
+#               Kube State Metrics - Deployment Manifest
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the Deployment for `kube-state-metrics`. This is a vital
+#   component of the Kubernetes monitoring stack. It's a simple service that
+#   listens to the Kubernetes API server and generates metrics about the state of
+#   the objects in the cluster.
+#
+# What It Does:
+#   `kube-state-metrics` is not about the health of the components themselves, but
+#   about the state of their Kubernetes resources. It provides metrics like:
+#   -   Number of desired vs. available replicas in a Deployment.
+#   -   Status of pods (e.g., Pending, Running, Failed).
+#   -   Capacity and usage of PersistentVolumeClaims.
+#   -   And much more.
+#
+#   These metrics are then scraped by Prometheus and are invaluable for creating
+#   dashboards that show the overall health and status of the Kubernetes cluster
+#   and its workloads.
+#
+# ==============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  namespace: infrastructure
+  labels:
+    component: kube-state-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-state-metrics
+  template:
+    metadata:
+      labels:
+        app: kube-state-metrics
+        component: kube-state-metrics
+    spec:
+      # The ServiceAccount is linked to a ClusterRole that gives it read-only access
+      # to list all the different types of resources across the cluster.
+      serviceAccountName: kube-state-metrics
+      containers:
+      - name: kube-state-metrics
+        # The image will be patched by Kustomize from `images_kube_state_metrics_full`.
+        image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.13.0
+        ports:
+        # The port where `kube-state-metrics` exposes its `/metrics` endpoint.
+        - containerPort: 8080
+          name: http-metrics
+        # Resource allocations will be patched by the `local` overlay.
+        # It's a relatively lightweight component.
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi

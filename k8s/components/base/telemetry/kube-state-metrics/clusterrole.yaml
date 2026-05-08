@@ -1,0 +1,64 @@
+# ==============================================================================
+#
+#               Kube State Metrics - ClusterRole
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines the `ClusterRole` for `kube-state-metrics`. A ClusterRole
+#   is a set of cluster-wide permissions. This role grants `kube-state-metrics`
+#   the necessary permissions to read the state of various Kubernetes objects
+#   across all namespaces.
+#
+# Permissions Rationale:
+#   `kube-state-metrics` works by connecting to the Kubernetes API server and
+#   generating metrics from the objects it finds. To do this, it needs read-only
+#   access (`list` and `watch` verbs) to a wide variety of resources. It does not
+#   need `create`, `update`, or `delete` permissions, making it a safe, read-only
+#   component in the cluster.
+#
+# ==============================================================================
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-state-metrics
+  labels:
+    component: kube-state-metrics
+rules:
+# Each rule grants `list` and `watch` permissions to a set of resources within an API group.
+- apiGroups: [""] # The core API group
+  resources: ["nodes", "pods", "services", "resourcequotas", "replicationcontrollers", "limitranges", "persistentvolumeclaims", "persistentvolumes", "namespaces", "endpoints"]
+  verbs: ["list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets", "daemonsets", "deployments", "replicasets"]
+  verbs: ["list", "watch"]
+- apiGroups: ["batch"]
+  resources: ["cronjobs", "jobs"]
+  verbs: ["list", "watch"]
+- apiGroups: ["autoscaling"]
+  resources: ["horizontalpodautoscalers"]
+  verbs: ["list", "watch"]
+# The `create` verbs for `tokenreviews` and `subjectaccessreviews` are required for secure,
+# delegated authentication and authorization checks with the API server.
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["tokenreviews"]
+  verbs: ["create"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["subjectaccessreviews"]
+  verbs: ["create"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["list", "watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses", "volumeattachments"]
+  verbs: ["list", "watch"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+  verbs: ["list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingressclasses"]
+  verbs: ["list", "watch"]

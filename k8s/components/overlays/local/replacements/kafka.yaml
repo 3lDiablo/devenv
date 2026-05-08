@@ -1,220 +1,194 @@
-# --- Kafka Replacements (Cluster + NodePools + Entity Operator) ---
+# ==============================================================================
+#
+#               Kustomize Replacements - Kafka
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines the Kustomize `replacements` for all Kafka-related
+#   components, including the main Kafka CR, the Node Pools, and the Entity
+#   Operator. It declaratively maps values from the `global-values` ConfigMap
+#   (which is sourced from `config.yaml`) to the appropriate fields in the base
+#   Strimzi manifests.
+#
+# ==============================================================================
+
+# --- Kafka Version ---
 - source:
     fieldPath: data.settings_kafka_version
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.kafka.version
-    select:
-      kind: Kafka
-      name: kafka-cluster
-  - fieldPaths:
-    - spec.version
-    select:
-      kind: KafkaConnect
-      name: kafka-connect
+  # Target 1: The main Kafka cluster version.
+  - fieldPaths: [spec.kafka.version]
+    select: {kind: Kafka, name: kafka-cluster}
+  # Target 2: The Kafka Connect cluster version (should match).
+  - fieldPaths: [spec.version]
+    select: {kind: KafkaConnect, name: kafka-connect}
+
+# --- KRaft Metadata Version ---
 - source:
     fieldPath: data.settings_kafka_metadata_version
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.kafka.metadataVersion
-    select:
-      kind: Kafka
-      name: kafka-cluster
+  - fieldPaths: [spec.kafka.metadataVersion]
+    select: {kind: Kafka, name: kafka-cluster}
+
+# --- Replica Counts ---
 - source:
     fieldPath: data.settings_kafka_broker_replicas
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.replicas
-    select:
-      kind: KafkaNodePool
-      name: brokers
+  - fieldPaths: [spec.replicas]
+    select: {kind: KafkaNodePool, name: broker}
 - source:
     fieldPath: data.settings_kafka_controller_replicas
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.replicas
-    select:
-      kind: KafkaNodePool
-      name: controllers
+  - fieldPaths: [spec.replicas]
+    select: {kind: KafkaNodePool, name: controller}
+
+# --- External Listener NodePort ---
 - source:
+    # The index `0` corresponds to the first item in the `cluster.ports` array in `config.yaml`.
     fieldPath: data.cluster_ports_0_node
     kind: ConfigMap
     name: global-values
   targets:
-  - fieldPaths:
-    - spec.kafka.listeners.1.configuration.bootstrap.nodePort
-    select:
-      kind: Kafka
-      name: kafka-cluster
-- source:
-    kind: ConfigMap
-    name: global-values
-    fieldPath: data.settings_kafka_port
-  targets:
-    - select:
-        kind: Kafka
-        name: kafka-cluster
-      fieldPaths:
-        - spec.kafka.listeners.0.port
-    - select:
-        kind: KafkaConnect
-        name: kafka-connect
-      fieldPaths:
-        - spec.bootstrapServers
-      options:
-        delimiter: ":"
-        index: 1
-- source:
-    kind: ConfigMap
-    name: global-values
-    fieldPath: data.settings_kafka_resources_cpu_request
-  targets:
-    - select:
-        kind: KafkaNodePool
-        name: brokers
-      fieldPaths: [spec.resources.requests.cpu]
-    - select:
-        kind: KafkaNodePool
-        name: controllers
-      fieldPaths: [spec.resources.requests.cpu]
-- source:
-    kind: ConfigMap
-    name: global-values
-    fieldPath: data.settings_kafka_resources_cpu_limit
-  targets:
-    - select:
-        kind: KafkaNodePool
-        name: brokers
-      fieldPaths: [spec.resources.limits.cpu]
-    - select:
-        kind: KafkaNodePool
-        name: controllers
-      fieldPaths: [spec.resources.limits.cpu]
-- source:
-    kind: ConfigMap
-    name: global-values
-    fieldPath: data.settings_kafka_resources_memory_request
-  targets:
-    - select:
-        kind: KafkaNodePool
-        name: brokers
-      fieldPaths: [spec.resources.requests.memory]
-    - select:
-        kind: KafkaNodePool
-        name: controllers
-      fieldPaths: [spec.resources.requests.memory]
-- source:
-    kind: ConfigMap
-    name: global-values
-    fieldPath: data.settings_kafka_resources_memory_limit
-  targets:
-    - select:
-        kind: KafkaNodePool
-        name: brokers
-      fieldPaths: [spec.resources.limits.memory]
-    - select:
-        kind: KafkaNodePool
-        name: controllers
-      fieldPaths: [spec.resources.limits.memory]
-- source:
-    kind: ConfigMap
-    name: global-values
-    fieldPath: data.settings_kafka_jvm_xms
-  targets:
-    - select:
-        kind: KafkaNodePool
-        name: brokers
-      fieldPaths: ["spec.jvmOptions.-Xms"]
-    - select:
-        kind: KafkaNodePool
-        name: controllers
-      fieldPaths: ["spec.jvmOptions.-Xms"]
-- source:
-    kind: ConfigMap
-    name: global-values
-    fieldPath: data.settings_kafka_jvm_xmx
-  targets:
-    - select:
-        kind: KafkaNodePool
-        name: brokers
-      fieldPaths: ["spec.jvmOptions.-Xmx"]
-    - select:
-        kind: KafkaNodePool
-        name: controllers
-      fieldPaths: ["spec.jvmOptions.-Xmx"]
+  # The path targets the `nodePort` field of the second listener (`listeners.1`), which is the external one.
+  - fieldPaths: [spec.kafka.listeners.1.configuration.bootstrap.nodePort]
+    select: {kind: Kafka, name: kafka-cluster}
 
-# --- Entity Operator ---
+# --- Kafka Port ---
 - source:
+    fieldPath: data.settings_kafka_port
     kind: ConfigMap
     name: global-values
+  targets:
+  # Target 1: The internal listener port.
+  - fieldPaths: [spec.kafka.listeners.0.port]
+    select: {kind: Kafka, name: kafka-cluster}
+  # Target 2: The port part of the `bootstrapServers` string in KafkaConnect.
+  - fieldPaths: [spec.bootstrapServers]
+    select: {kind: KafkaConnect, name: kafka-connect}
+    options:
+      delimiter: ":"
+      index: 1 # Replaces the part of the string after the colon.
+
+# --- Kafka Node Pool Resources ---
+- source:
+    fieldPath: data.settings_kafka_resources_cpu_request
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.resources.requests.cpu]
+    select: {kind: KafkaNodePool, name: broker}
+  - fieldPaths: [spec.resources.requests.cpu]
+    select: {kind: KafkaNodePool, name: controller}
+- source:
+    fieldPath: data.settings_kafka_resources_cpu_limit
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.resources.limits.cpu]
+    select: {kind: KafkaNodePool, name: broker}
+  - fieldPaths: [spec.resources.limits.cpu]
+    select: {kind: KafkaNodePool, name: controller}
+- source:
+    fieldPath: data.settings_kafka_resources_memory_request
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.resources.requests.memory]
+    select: {kind: KafkaNodePool, name: broker}
+  - fieldPaths: [spec.resources.requests.memory]
+    select: {kind: KafkaNodePool, name: controller}
+- source:
+    fieldPath: data.settings_kafka_resources_memory_limit
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.resources.limits.memory]
+    select: {kind: KafkaNodePool, name: broker}
+  - fieldPaths: [spec.resources.limits.memory]
+    select: {kind: KafkaNodePool, name: controller}
+
+# --- Kafka Node Pool JVM Options ---
+- source:
+    fieldPath: data.settings_kafka_jvm_xms
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: ["spec.jvmOptions.-Xms"]
+    select: {kind: KafkaNodePool, name: broker}
+  - fieldPaths: ["spec.jvmOptions.-Xms"]
+    select: {kind: KafkaNodePool, name: controller}
+- source:
+    fieldPath: data.settings_kafka_jvm_xmx
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: ["spec.jvmOptions.-Xmx"]
+    select: {kind: KafkaNodePool, name: broker}
+  - fieldPaths: ["spec.jvmOptions.-Xmx"]
+    select: {kind: KafkaNodePool, name: controller}
+
+# --- Entity Operator Resources & JVM ---
+# These replacements target fields within the `entityOperator` section of the main `Kafka` CR.
+- source:
     fieldPath: data.settings_entity_operator_resources_cpu_request
-  targets:
-    - select:
-        kind: Kafka
-        name: kafka-cluster
-      fieldPaths: 
-        - spec.entityOperator.topicOperator.resources.requests.cpu
-        - spec.entityOperator.userOperator.resources.requests.cpu
-- source:
     kind: ConfigMap
     name: global-values
+  targets:
+  - fieldPaths:
+    - spec.entityOperator.topicOperator.resources.requests.cpu
+    - spec.entityOperator.userOperator.resources.requests.cpu
+    select: {kind: Kafka, name: kafka-cluster}
+- source:
     fieldPath: data.settings_entity_operator_resources_cpu_limit
-  targets:
-    - select:
-        kind: Kafka
-        name: kafka-cluster
-      fieldPaths:
-        - spec.entityOperator.topicOperator.resources.limits.cpu
-        - spec.entityOperator.userOperator.resources.limits.cpu
-- source:
     kind: ConfigMap
     name: global-values
+  targets:
+  - fieldPaths:
+    - spec.entityOperator.topicOperator.resources.limits.cpu
+    - spec.entityOperator.userOperator.resources.limits.cpu
+    select: {kind: Kafka, name: kafka-cluster}
+- source:
     fieldPath: data.settings_entity_operator_resources_memory_request
-  targets:
-    - select:
-        kind: Kafka
-        name: kafka-cluster
-      fieldPaths:
-        - spec.entityOperator.topicOperator.resources.requests.memory
-        - spec.entityOperator.userOperator.resources.requests.memory
-- source:
     kind: ConfigMap
     name: global-values
+  targets:
+  - fieldPaths:
+    - spec.entityOperator.topicOperator.resources.requests.memory
+    - spec.entityOperator.userOperator.resources.requests.memory
+    select: {kind: Kafka, name: kafka-cluster}
+- source:
     fieldPath: data.settings_entity_operator_resources_memory_limit
-  targets:
-    - select:
-        kind: Kafka
-        name: kafka-cluster
-      fieldPaths:
-        - spec.entityOperator.topicOperator.resources.limits.memory
-        - spec.entityOperator.userOperator.resources.limits.memory
-- source:
     kind: ConfigMap
     name: global-values
+  targets:
+  - fieldPaths:
+    - spec.entityOperator.topicOperator.resources.limits.memory
+    - spec.entityOperator.userOperator.resources.limits.memory
+    select: {kind: Kafka, name: kafka-cluster}
+- source:
     fieldPath: data.settings_entity_operator_jvm_xms
-  targets:
-    - select:
-        kind: Kafka
-        name: kafka-cluster
-      fieldPaths:
-        - spec.entityOperator.topicOperator.jvmOptions.-Xms
-        - spec.entityOperator.userOperator.jvmOptions.-Xms
-- source:
     kind: ConfigMap
     name: global-values
-    fieldPath: data.settings_entity_operator_jvm_xmx
   targets:
-    - select:
-        kind: Kafka
-        name: kafka-cluster
-      fieldPaths:
-        - spec.entityOperator.topicOperator.jvmOptions.-Xmx
-        - spec.entityOperator.userOperator.jvmOptions.-Xmx
+  - fieldPaths:
+    - spec.entityOperator.topicOperator.jvmOptions.-Xms
+    - spec.entityOperator.userOperator.jvmOptions.-Xms
+    select: {kind: Kafka, name: kafka-cluster}
+- source:
+    fieldPath: data.settings_entity_operator_jvm_xmx
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths:
+    - spec.entityOperator.topicOperator.jvmOptions.-Xmx
+    - spec.entityOperator.userOperator.jvmOptions.-Xmx
+    select: {kind: Kafka, name: kafka-cluster}

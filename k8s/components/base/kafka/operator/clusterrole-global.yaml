@@ -1,17 +1,39 @@
+# ==============================================================================
+#
+#               Strimzi Operator - Global ClusterRole
+#
+# ==============================================================================
+#
+# Overview:
+#   This manifest defines a `ClusterRole`, which is a cluster-wide set of permissions.
+#   These are permissions that the Strimzi Operator needs to function correctly
+#   across the entire Kubernetes cluster, regardless of which namespace it is
+#   watching.
+#
+#   A `ClusterRole` only defines permissions; it does not grant them. A separate
+#   `ClusterRoleBinding` is required to grant these permissions to a specific
+#   `ServiceAccount` (in this case, the `strimzi-cluster-operator` ServiceAccount).
+#
+# ==============================================================================
+
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: strimzi-cluster-operator-global
   labels:
     app: strimzi
+# `rules` define the actual permissions granted by this role.
 rules:
+  # --- Permissions for managing ClusterRoleBindings ---
   - apiGroups:
       - "rbac.authorization.k8s.io"
     resources:
-      # The cluster operator needs to create and manage cluster role bindings in the case of an install where a user
-      # has specified they want their cluster role bindings generated
+      # The operator needs to be able to manage ClusterRoleBindings so it can
+      # delegate permissions to the components it creates, such as Kafka brokers
+      # or the Entity Operator.
       - clusterrolebindings
     verbs:
+      # The operator needs full control over the lifecycle of these bindings.
       - get
       - list
       - watch
@@ -19,20 +41,26 @@ rules:
       - delete
       - patch
       - update
+
+  # --- Permissions for viewing StorageClasses ---
   - apiGroups:
       - storage.k8s.io
     resources:
-      # The cluster operator requires "get" permissions to view storage class details
-      # This is because only a persistent volume of a supported storage class type can be resized
+      # The operator needs to get information about StorageClasses to support
+      # features like persistent volume resizing, which may only be supported
+      # by certain types of storage.
       - storageclasses
     verbs:
       - get
+
+  # --- Permissions for listing Nodes ---
   - apiGroups:
-      - ""
+      - "" # The core Kubernetes API group.
     resources:
-      # The cluster operator requires "list" permissions to view all nodes in a cluster
-      # The listing is used to determine the node addresses when NodePort access is configured
-      # These addresses are then exposed in the custom resource states
+      # The operator needs to list all nodes in the cluster to determine their
+      # external IP addresses or hostnames. This is necessary to correctly
+      # configure the advertised addresses for Kafka brokers when using
+      # NodePort listeners, so external clients know how to connect.
       - nodes
     verbs:
       - list

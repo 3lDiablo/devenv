@@ -1,60 +1,109 @@
-# ⚡ Orchestration Taskfile (Pure Data Pipeline)
-# ---------------------------------------------
-# This file is the central orchestrator for the local development environment.
-version: '3'
+# ==============================================================================
+#
+#               ⚡ Orchestration Taskfile for Local Development Environment ⚡
+#
+# ==============================================================================
+#
+# Overview:
+#   This Taskfile automates the entire lifecycle of the local development environment,
+#   from initial setup to teardown. It uses a "pure data pipeline" approach, where
+#   `config.yaml` is the single source of truth, and this file contains the logic
+#   to render, create, deploy, and manage the environment based on that data.
+#
+#   The pipeline is designed to be idempotent and modular, allowing for both
+#   full environment management (`up`, `down`) and granular control over specific
+#   components (`deploy:postgres`, `deploy:kafka:cluster`, etc.).
+#
+# Key Tools Used:
+#   - Task: A modern, cross-platform task runner (like Make).
+#   - yq: A command-line YAML processor, used for reading from `config.yaml` and
+#         templating Kubernetes manifests.
+#   - jq: A command-line JSON processor, used for handling JSON data and schemas.
+#   - kubectl: The Kubernetes command-line tool for interacting with the cluster.
+#   - kind: A tool for running local Kubernetes clusters using Docker container "nodes".
+#
+# ==============================================================================
 
+version: "3"
+
+# `silent: true` prevents Task from echoing the commands it's running,
+# resulting in cleaner, more readable output. We explicitly echo what we want the user to see.
 silent: true
 
-# -----------------------------------------------------------------------------
-# DYNAMIC VARIABLES
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# § DYNAMIC VARIABLES & ENVIRONMENT
+#   These variables are dynamically populated by reading values from `config.yaml`
+#   using `yq`. This ensures that the orchestration logic always uses the most
+#   up-to-date settings from the single source of truth.
+# ------------------------------------------------------------------------------
 vars:
+  # Reads the cluster name from config.yaml (e.g., "dev-cluster").
   CLUSTER_NAME: { sh: "yq eval '.cluster.name' config.yaml" }
+  # Reads the Kind provider from config.yaml (e.g., "docker" or "podman").
   PROVIDER: { sh: "yq eval '.cluster.provider' config.yaml" }
+  # Reads the Kafka cluster name from config.yaml (e.g., "kafka-cluster").
   KAFKA_NAME: { sh: "yq eval '.settings.kafka.cluster_name' config.yaml" }
+  # Defines the kubectl context name for the Kind cluster.
   CONTEXT: "kind-{{.CLUSTER_NAME}}"
+  # Adds a flag for Podman to disable TLS verification, which is sometimes needed.
   TLS_FLAG: '{{if eq .PROVIDER "podman"}}--tls-verify=false{{end}}'
 
+  # --- Telemetry Port Mappings ---
+  # These ports are extracted here for use in manifest rendering and dashboard patching.
+  KAFKA_METRICS_PORT: { sh: "yq eval '.settings.telemetry.prometheus.kafka_metrics_port' config.yaml" }
+  POSTGRES_METRICS_PORT: { sh: "yq eval '.settings.postgres.metrics_port' config.yaml" }
+  COMMON_METRICS_PORT: { sh: "yq eval '.settings.telemetry.common_metrics_port' config.yaml" }
+  OTEL_METRICS_PORT: { sh: "yq eval '.settings.telemetry.otel_collector.metrics_port' config.yaml" }
+  OTEL_EXPORTER_PORT: { sh: "yq eval '.settings.telemetry.otel_collector.exporter_port' config.yaml" }
+  PROMETHEUS_PORT: { sh: "yq eval '.settings.telemetry.prometheus.port' config.yaml" }
+
 env:
+  # Sets the experimental provider environment variable for Kind.
   KIND_EXPERIMENTAL_PROVIDER: "{{.PROVIDER}}"
 
 tasks:
+  # The default task lists all available tasks when `task` is run without arguments.
   default:
     cmds:
       - task: --list
 
   # ===========================================================================
-  # PRIMARY PIPELINE
+  # § STAGE 0: PRIMARY PIPELINE (HIGH-LEVEL WORKFLOWS)
+  #   These are the main entry points for users to manage the environment.
   # ===========================================================================
 
   up:
-    desc: "Initialize the full environment from scratch."
+    desc: "🚀 Initialize the full environment from scratch (Idempotent)."
     cmds:
-      - task: check:deps
-      - task: render
-      - task: cluster:create
-      - task: cluster:load-images
-      - task: init:namespace
-      - task: deploy:all
+      - task: check:deps # Verify all required CLI tools are installed.
+      - task: render # Generate all Kubernetes manifests from templates.
+      - task: cluster:create # Create the Kind cluster if it doesn't exist.
+      - task: cluster:load-images # Pre-load container images into the cluster to speed up deployments.
+      - task: init:namespace # Create the 'infrastructure' namespace.
+      - task: deploy:all # Deploy all services in parallel.
 
   down:
-    desc: "Nuclear Reset: Deletes cluster and generated files."
+    desc: "🔥 Nuclear Reset: Deletes the Kind cluster and all generated files."
     cmds:
       - |
-        echo "🔥 Deleting cluster {{.CLUSTER_NAME}}..."
+        echo "🔥 Deleting Kind cluster '{{.CLUSTER_NAME}}'..."
         kind delete cluster --name "{{.CLUSTER_NAME}}"
       - |
-        echo "🧹 Performing hard cleanup..."
+        echo "🧹 Performing hard cleanup of Docker/Podman resources..."
+        # These commands clean up any orphaned volumes or networks to prevent conflicts.
         {{.PROVIDER}} volume prune -f >/dev/null 2>&1 || true
         {{.PROVIDER}} network rm kind >/dev/null 2>&1 || true
-      - rm -rf k8s/cluster/kind.yaml k8s/components/overlays/local/*.yaml k8s/components/overlays/local/*.json k8s/components/overlays/local/*.conf definitions/rendered/*.yaml
+      # Remove all dynamically generated files to ensure a clean state for the next `up`.
+      - rm -rf k8s/cluster/kind.yaml k8s/components/overlays/local/values.yaml k8s/components/overlays/local/*.json k8s/components/overlays/local/*.conf definitions/rendered/*.yaml
 
   # ===========================================================================
-  # STAGE 1: DATA RENDERING
+  # § STAGE 1: DATA RENDERING
+  #   This stage is responsible for generating all necessary configuration files
+  #   and Kubernetes manifests by combining base templates with values from `config.yaml`.
   # ===========================================================================
 
   render:
-    desc: "Render all templates using config.yaml as the Source of Truth."
+    desc: "🎨 Render all templates using config.yaml as the Single Source of Truth."
     cmds:
       - task: render:kind
       - task: render:values
@@ -62,11 +111,15 @@ tasks:
       - task: render:redpanda
       - task: render:karapace
       - task: render:topics
+      - task: render:telemetry
 
   render:kind:
-    internal: true
+    internal: true # This task is not shown in the main `task --list` output.
     cmds:
       - |
+        # This command generates the final `kind.yaml` config file.
+        # It takes the base template `kind-config.base.yaml` and injects values
+        # from `config.yaml`, such as the node image and host-to-node port mappings.
         yq eval 'explode(.)' config.yaml | yq eval-all '
           select(fileIndex == 0) as $base |
           select(fileIndex == 1) as $cfg |
@@ -84,15 +137,33 @@ tasks:
     internal: true
     cmds:
       - |
+        # This task generates a global ConfigMap named `global-values`.
+        # This ConfigMap makes all scalar values from `config.yaml` available
+        # inside the cluster for Kustomize to use.
+
+        # Create the ConfigMap header.
         echo "apiVersion: v1" > k8s/components/overlays/local/values.yaml
         echo "kind: ConfigMap" >> k8s/components/overlays/local/values.yaml
         echo "metadata:" >> k8s/components/overlays/local/values.yaml
         echo "  name: global-values" >> k8s/components/overlays/local/values.yaml
         echo "  namespace: infrastructure" >> k8s/components/overlays/local/values.yaml
+        echo "  labels:" >> k8s/components/overlays/local/values.yaml
+        echo "    component: common" >> k8s/components/overlays/local/values.yaml
         echo "data:" >> k8s/components/overlays/local/values.yaml
+
+        # Flatten all paths in config.yaml (e.g., settings.kafka.port) into key-value pairs
+        # (e.g., settings_kafka_port: "9092") and append them to the ConfigMap.
         yq eval 'explode(.)' config.yaml | yq eval '.. | select(tag == "!!str" or tag == "!!int" or tag == "!!bool") | "  " + (path | join("_")) + ": \"" + . + "\""' - >> k8s/components/overlays/local/values.yaml
+
+        # Generate full image tags (e.g., images_postgres_full: "docker.io/library/postgres:17.0-alpine")
+        # and add them to the ConfigMap. This simplifies image references in Kustomize patches.
         yq eval '.images | to_entries | .[] | "  images_" + .key + "_full: \"" + .value.registry + (select(.value.repository) | "/" + .value.repository) + ":" + .value.tag + "\""' config.yaml >> k8s/components/overlays/local/values.yaml
-        echo "  # JVM Auto-Sizing" >> k8s/components/overlays/local/values.yaml
+
+        # --- JVM Auto-Sizing ---
+        # This logic calculates JVM heap settings (Xms, Xmx) for Java applications
+        # as 70% of the memory limit defined in `config.yaml`. This prevents pods
+        # from being OOMKilled by the kernel while giving the JVM a safe amount of memory.
+        echo "  # JVM Auto-Sizing (70% of memory limit)" >> k8s/components/overlays/local/values.yaml
         for component in kafka schema_registry kafka_connect entity_operator; do
           MEM_LIMIT=$(yq eval ".settings.${component}.resources.memory.limit" config.yaml)
           if [ "$MEM_LIMIT" != "null" ]; then
@@ -112,18 +183,37 @@ tasks:
     internal: true
     cmds:
       - |
+        # This task generates CloudBeaver configuration files by injecting database
+        # credentials and other settings from `config.yaml` into templates.
         PG_USER=$(yq e '.settings.postgres.user' config.yaml)
         PG_PASS=$(yq e '.settings.postgres.password' config.yaml)
+        CB_ADMIN_USER=$(yq e '.settings.cloudbeaver.admin_user' config.yaml)
+        CB_ADMIN_PASS=$(yq e '.settings.cloudbeaver.admin_password' config.yaml)
+
+        # Render the data source config for connecting to the local Postgres.
         yq e ".connections.\"postgres-local\".configuration.user = \"$PG_USER\" | .connections.\"postgres-local\".configuration.password = \"$PG_PASS\"" \
-               k8s/components/base/cloudbeaver/data-sources.json.tpl > k8s/components/overlays/local/data-sources.json
+               k8s/components/base/cloudbeaver/data-sources.json.tpl > k8s/components/overlays/local/cloudbeaver/data-sources.json
+               
+        yq e ".connections.\"postgres-local\".configuration.user = \"$PG_USER\" | .connections.\"postgres-local\".configuration.password = \"$PG_PASS\"" \
+               k8s/components/base/cloudbeaver/data-sources.json.tpl > k8s/components/overlays/local/cloudbeaver/initial-data-sources.conf
+               
+        # Render the main CloudBeaver config, pointing it to its own metadata database.
         yq e ".server.database.url = \"jdbc:postgresql://postgres:5432/$(yq e '.settings.cloudbeaver.db_name' config.yaml)\" | .server.database.user = \"$PG_USER\" | .server.database.password = \"$PG_PASS\"" \
-               k8s/components/base/cloudbeaver/cloudbeaver.conf.tpl > k8s/components/overlays/local/cloudbeaver.conf
-        yq e '.' k8s/components/base/cloudbeaver/initial-data.conf.tpl > k8s/components/overlays/local/initial-data.conf
+               k8s/components/base/cloudbeaver/cloudbeaver.conf.tpl > k8s/components/overlays/local/cloudbeaver/cloudbeaver.conf
+               
+        # Render the initial admin user credentials.
+        sed -e "s/ADMIN_USER/$CB_ADMIN_USER/g" -e "s/ADMIN_PASSWORD/$CB_ADMIN_PASS/g" \
+               k8s/components/base/cloudbeaver/initial-data.conf.tpl > k8s/components/overlays/local/cloudbeaver/initial-data.conf
+               
+        # Copy the static product configuration.
+        cat k8s/components/base/cloudbeaver/product.conf.tpl > k8s/components/overlays/local/cloudbeaver/product.conf
 
   render:redpanda:
     internal: true
     cmds:
       - |
+        # This task generates the configuration for Redpanda Console, pointing it to the
+        # internal Kubernetes service endpoints for Kafka, Schema Registry, and Kafka Connect.
         KAFKA_PORT=$(yq e '.settings.kafka.port' config.yaml)
         SR_PORT=$(yq e '.settings.schema_registry.port' config.yaml)
         KC_PORT=$(yq e '.settings.kafka_connect.port' config.yaml)
@@ -136,6 +226,8 @@ tasks:
     internal: true
     cmds:
       - |
+        # This task generates the configuration for Karapace REST Proxy, connecting it
+        # to the Kafka brokers and Schema Registry.
         KAFKA_PORT=$(yq e '.settings.kafka.port' config.yaml)
         SR_PORT=$(yq e '.settings.schema_registry.port' config.yaml)
         KARAPACE_PORT=$(yq e '.settings.karapace_rest.port' config.yaml)
@@ -147,74 +239,218 @@ tasks:
     internal: true
     cmds:
       - |
+        # This task declaratively generates `KafkaTopic` custom resource YAML files.
+        # It iterates through each topic definition in `definitions/topics/*.json`,
+        # combines it with a base `topic.yaml.tpl`, and outputs a final manifest
+        # in the `definitions/rendered/` directory.
         mkdir -p definitions/rendered
         CLUSTER_NAME=$(yq e '.settings.kafka.cluster_name' config.yaml)
         for f in definitions/topics/*.json; do
           TOPIC_NAME=$(jq -r '.topic_name' "$f")
           PARTITIONS=$(jq -r '.partitions_count // 6' "$f")
           REPLICATION=$(jq -r '.replication_factor // 1' "$f")
+          # Use yq to populate the topic template with metadata and spec values.
           yq e ".metadata.name = \"$TOPIC_NAME\" | 
                 .metadata.namespace = \"infrastructure\" | 
                 .metadata.labels.\"strimzi.io/cluster\" = \"$CLUSTER_NAME\" |
                 .spec.partitions = $PARTITIONS |
                 .spec.replicas = $REPLICATION" k8s/components/base/kafka/topics/topic.yaml.tpl > "definitions/rendered/$TOPIC_NAME.yaml"
+          # Inject topic-specific configurations (like retention.ms) from the JSON file.
           yq e -i ".spec.config = $(jq -c '.config // {}' "$f")" "definitions/rendered/$TOPIC_NAME.yaml"
         done
 
+  render:telemetry:
+    internal: true
+    vars:
+      # Define patterns for dashboard patching. 
+      # We use double dollars to escape Task interpolation and pass them to the shell.
+      DS_PROM_PATTERN: '$${DS_PROMETHEUS}'
+      VAR_DS_PATTERN: '$${VAR_DATASOURCE}'
+    cmds:
+      - |
+        # Prepare telemetry directories
+        mkdir -p k8s/components/overlays/local/telemetry/grafana/dashboards
+        mkdir -p k8s/components/overlays/local/telemetry/prometheus
+        mkdir -p k8s/components/overlays/local/telemetry/otel-collector
+
+        # Render Prometheus config
+        yq eval '. |
+              (.. | select(tag == "!!str")) |= sub("KAFKA_NAME", "{{.KAFKA_NAME}}") |
+              (.. | select(tag == "!!str")) |= sub("KAFKA_METRICS_PORT", "{{.KAFKA_METRICS_PORT}}") |
+              (.. | select(tag == "!!str")) |= sub("POSTGRES_METRICS_PORT", "{{.POSTGRES_METRICS_PORT}}") |
+              (.. | select(tag == "!!str")) |= sub("COMMON_METRICS_PORT", "{{.COMMON_METRICS_PORT}}")' \
+              k8s/components/base/telemetry/prometheus/prometheus.yml.tpl > k8s/components/overlays/local/telemetry/prometheus/prometheus.yml
+
+        # Render OTel Collector config
+        yq eval '. |
+              (.. | select(tag == "!!str")) |= sub("KAFKA_NAME", "{{.KAFKA_NAME}}") |
+              (.. | select(tag == "!!str")) |= sub("KAFKA_METRICS_PORT", "{{.KAFKA_METRICS_PORT}}") |
+              (.. | select(tag == "!!str")) |= sub("POSTGRES_METRICS_PORT", "{{.POSTGRES_METRICS_PORT}}") |
+              (.. | select(tag == "!!str")) |= sub("COMMON_METRICS_PORT", "{{.COMMON_METRICS_PORT}}") |
+              (.. | select(tag == "!!str")) |= sub("OTEL_METRICS_PORT", "{{.OTEL_METRICS_PORT}}") |
+              (.. | select(tag == "!!str")) |= sub("OTEL_EXPORTER_PORT", "{{.OTEL_EXPORTER_PORT}}")' \
+              k8s/components/base/telemetry/otel-collector/otel-collector-config.yaml.tpl > k8s/components/overlays/local/telemetry/otel-collector/otel-collector-config.yaml
+
+        # Render Grafana Datasources
+        yq eval '(.. | select(tag == "!!str")) |= sub("PROMETHEUS_PORT", "{{.PROMETHEUS_PORT}}")' \
+              k8s/components/base/telemetry/grafana/datasources.yaml.tpl > k8s/components/overlays/local/telemetry/grafana/datasources.yaml
+
+        # Download and standardize expert dashboards
+        for db_id in 10973 9628 13332; do
+          DEST="k8s/components/overlays/local/telemetry/grafana/dashboards/${db_id}.json"
+          if [ ! -f "$DEST" ]; then
+            echo "📥 Downloading Grafana Dashboard ID ${db_id}..."
+            curl -s "https://grafana.com/api/dashboards/${db_id}/revisions/latest/download" -o "$DEST"
+          fi
+          
+          # Use yq to adapt dashboards to our environment.
+          # We use environment variables to pass the regex patterns safely.
+          DS_PROM="{{.DS_PROM_PATTERN}}" \
+          VAR_DS="{{.VAR_DS_PATTERN}}" \
+          CLEAN_REGEX='(cluster|release|job)=~?\\*".*?\\*",?' \
+          CLEAN_REGEX_2=',?(cluster|release|job)=~?\\*".*?\\*"' \
+          yq eval -i '
+            (.. | select(tag == "!!str")) |= sub(strenv(DS_PROM), "Prometheus") |
+            (.. | select(tag == "!!str")) |= sub(strenv(VAR_DS), "Prometheus") |
+            (.. | select(tag == "!!str")) |= sub("label_values\\(container_cpu_user_seconds_total", "label_values(up") |
+            
+            # Clean up Helm/Cluster labels without the escaping issues
+            (.. | select(tag == "!!str")) |= sub(strenv(CLEAN_REGEX), "") |
+            (.. | select(tag == "!!str")) |= sub(strenv(CLEAN_REGEX_2), "") |
+            
+            # Final syntax cleanup
+            (.. | select(tag == "!!str")) |= sub("\\{,", "{") |
+            (.. | select(tag == "!!str")) |= sub(",\\}", "}") |
+            (.. | select(tag == "!!str")) |= sub("\\{\\}", " ")
+          ' "$DEST"
+
+          # Remove problematic "release" and "cluster" variables from the dashboard UI
+          yq eval -i 'del(.templating.list[] | select(.name == "release" or .name == "cluster"))' "$DEST"
+        done
+
   # ===========================================================================
-  # STAGE 2: CLUSTER LIFECYCLE
+  # § STAGE 2: CLUSTER LIFECYCLE
+  #   Tasks for creating, starting, stopping, and managing the Kind cluster itself.
   # ===========================================================================
 
   cluster:create:
+    # Creates the Kind cluster using the configuration rendered in `render:kind`.
     cmds:
       - kind create cluster --name "{{.CLUSTER_NAME}}" --config k8s/cluster/kind.yaml
+    # The `status` check makes this task idempotent. If the cluster already exists
+    # and the API is reachable, the `cmds` will not run again.
     status:
       - |
         kind get clusters | grep -q "^{{.CLUSTER_NAME}}$" && 
         kubectl cluster-info --context {{.CONTEXT}} >/dev/null 2>&1
 
   cluster:load-images:
-     cmds:
-       - |
-         IMAGES=$(yq eval '.images | .. | select(has("repository")) | .registry + "/" + .repository + ":" + .tag' config.yaml | sort | uniq)
-         for img in $IMAGES; do
-           if ! {{.PROVIDER}} exec {{.CLUSTER_NAME}}-control-plane crictl images | grep -q "${img%%:*}" >/dev/null 2>&1; then
-             echo "🚚 Image $img not in cluster. Checking host..."
-             {{.PROVIDER}} image inspect "$img" >/dev/null 2>&1 || {{.PROVIDER}} pull {{.TLS_FLAG}} "$img"
-             echo "📦 Loading $img into cluster {{.CLUSTER_NAME}}..."
-             {{.PROVIDER}} save "$img" | kind load image-archive /dev/stdin --name "{{.CLUSTER_NAME}}"
-           fi
-         done
+    # This task pre-loads all required container images into the Kind cluster nodes.
+    # It includes self-healing logic: if an image is corrupt in the local Docker cache
+    # (common "digest not found" error), it will force a re-pull.
+    cmds:
+      - |
+        echo "⏳ Waiting for containerd to be ready inside the node..."
+        # Wait until 'ctr' is available and the namespace list can be retrieved.
+        for i in $(seq 1 30); do
+          if {{.PROVIDER}} exec {{.CLUSTER_NAME}}-control-plane ctr namespace ls >/dev/null 2>&1; then
+            break
+          fi
+          if [ "$i" -eq 30 ]; then
+            echo "❌ Timed out waiting for containerd inside the node."
+            exit 1
+          fi
+          sleep 2
+        done
+
+        IMAGES=$(yq eval '.images | .. | select(has("repository")) | .registry + "/" + .repository + ":" + .tag' config.yaml | sort | uniq)
+        for img in $IMAGES; do
+          if ! {{.PROVIDER}} exec {{.CLUSTER_NAME}}-control-plane crictl images | grep -q "${img%%:*}" >/dev/null 2>&1; then
+            echo "🚚 Loading $img into cluster {{.CLUSTER_NAME}}..."
+            
+            # Helper to find the exact name in local store (handles docker.io/ prefix issues)
+            find_local_img() {
+              if {{.PROVIDER}} image inspect "$1" >/dev/null 2>&1; then echo "$1"; return 0; fi
+              short="${1#docker.io/}"
+              if [ "$1" != "$short" ] && {{.PROVIDER}} image inspect "$short" >/dev/null 2>&1; then echo "$short"; return 0; fi
+              return 1
+            }
+
+            ACTUAL_IMG=$(find_local_img "$img") || {
+              echo "⚠️  Image $img missing. Pulling..."
+              {{.PROVIDER}} pull {{.TLS_FLAG}} "$img"
+              ACTUAL_IMG=$(find_local_img "$img") || {
+                echo "❌ Error: $img not found in {{.PROVIDER}} even after pull."
+                exit 1
+              }
+            }
+
+            kind load docker-image "$ACTUAL_IMG" --name "{{.CLUSTER_NAME}}"
+          fi
+        done
 
   stop:
-    desc: "Pause the environment (stop cluster nodes)."
+    desc: "⏸️  Pause the environment by stopping the Kind cluster nodes."
     cmds:
       - |
         echo "⏸️  Stopping cluster nodes..."
-        {{.PROVIDER}} stop {{.CLUSTER_NAME}}-control-plane
+        NODES=$(kind get nodes --name "{{.CLUSTER_NAME}}")
+        for node in $NODES; do
+          {{.PROVIDER}} stop $node
+        done
       - echo "✅ Cluster paused. Run 'task start' to resume."
 
   start:
-    desc: "Resume a paused environment, or create it if it doesn't exist."
+    desc: "▶️  Resume a paused environment, or create it if it doesn't exist."
     cmds:
       - |
+        # If the cluster doesn't exist at all, delegate to the full `up` task.
         if ! kind get clusters | grep -q "^{{.CLUSTER_NAME}}$"; then
           echo "Cluster not found. Running 'task up' instead..."
           task up
         else
+          # Otherwise, just start the stopped container nodes.
           echo "▶️  Starting cluster nodes..."
-          {{.PROVIDER}} start {{.CLUSTER_NAME}}-control-plane
-          echo "⏳ Waiting for Kubernetes API to be ready..."
-          kubectl wait --for=condition=Ready nodes --all --timeout=60s --context {{.CONTEXT}}
+          NODES=$(kind get nodes --name "{{.CLUSTER_NAME}}")
+          for node in $NODES; do
+            {{.PROVIDER}} start $node
+          done
+          
+          echo "⏳ Waiting for Kubernetes API to be responsive..."
+          MAX_RETRIES=30
+          COUNT=0
+          # We use a loop to wait for the API server to be reachable.
+          # The TLS handshake timeout often happens early in the startup process.
+          while ! kubectl get nodes --context {{.CONTEXT}} >/dev/null 2>&1; do
+            [ $COUNT -eq $MAX_RETRIES ] && echo "❌ API Server timed out" && exit 1
+            sleep 2
+            COUNT=$((COUNT + 1))
+          done
+          
+          # Give it a few more seconds to stabilize after the first successful response
+          sleep 5
+          
+          echo "⏳ Waiting for nodes to be ready..."
+          # Silencing stderr here too because it might still flake slightly
+          if ! kubectl wait --for=condition=Ready nodes --all --timeout=60s --context {{.CONTEXT}} >/dev/null 2>&1; then
+            echo "⚠️  Nodes not ready yet, retrying wait..."
+            kubectl wait --for=condition=Ready nodes --all --timeout=60s --context {{.CONTEXT}}
+          fi
           echo "🚀 Cluster resumed and ready."
         fi
 
   # ===========================================================================
-  # STAGE 3: MODULAR DEPLOYMENT
+  # § STAGE 3: MODULAR & PARALLELIZED DEPLOYMENT
+  #   These tasks deploy the individual services onto the Kubernetes cluster.
+  #   They are designed to be modular and use `deps` to manage dependencies,
+  #   allowing Task to run them in parallel where possible.
   # ===========================================================================
 
   deploy:all:
-    desc: "Parallelized deployment of modular overlays."
+    desc: "🚢 Deploy all services onto the cluster in parallel."
+    # The `deps` array lists all the sub-tasks that `deploy:all` depends on.
+    # Task will execute these dependencies in the correct order, parallelizing
+    # where the dependency graph allows.
     deps:
       - deploy:metrics-server
       - deploy:postgres
@@ -226,15 +462,18 @@ tasks:
       - deploy:kafka:connect
       - deploy:redpanda
       - deploy:karapace
+      - deploy:telemetry
       - provision:kafka
 
   deploy:metrics-server:
-    run: once
+    run: once # Ensures this task only runs once per `task` execution.
     cmds:
       - echo "🏗️  Installing Metrics Server..."
       - kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml --context "{{.CONTEXT}}"
       - echo "🔧 Patching Metrics Server for insecure TLS (required for Kind)..."
       - |
+        # This patch is necessary for Metrics Server to communicate with the Kubelet
+        # running on the Kind nodes, which uses a self-signed certificate.
         kubectl patch deployment metrics-server -n kube-system --type='json' \
           -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]' \
           --context "{{.CONTEXT}}"
@@ -244,97 +483,133 @@ tasks:
     run: once
     deps: [init:namespace]
     cmds:
-      - echo "🏗️  Deploying Strimzi Operator..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "strimzi")' | kubectl apply -f - --context "{{.CONTEXT}}"
-      - echo "⏳ Waiting for Strimzi CRDs..."
-      - kubectl wait --for=condition=Established crd/kafkatopics.kafka.strimzi.io --timeout=60s --context "{{.CONTEXT}}"
+      - echo "🏗️  Deploying Strimzi Kafka Operator..."
+      # This command builds the Kustomize overlay, filters for only the 'strimzi' and 'common'
+      # components, and applies them to the cluster. This modular approach allows for
+      # granular deployment of specific services.
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "strimzi" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - echo "⏳ Waiting for Strimzi CRDs to become established..."
+      - |
+        # The Strimzi operator defines several Custom Resource Definitions (CRDs).
+        # We must wait for these CRDs to be "Established" before we can create
+        # instances of them (like a `Kafka` cluster). This loop polls the status of each CRD.
+        for crd in \
+          kafkas.kafka.strimzi.io \
+          kafkanodepools.kafka.strimzi.io \
+          kafkatopics.kafka.strimzi.io \
+          kafkausers.kafka.strimzi.io \
+          strimzipodsets.core.strimzi.io; do
+          echo "  - Waiting for $crd..."
+          for i in $(seq 1 60); do
+            if kubectl get crd "$crd" --context "{{.CONTEXT}}" -o json 2>/dev/null | \
+              jq -e '(.status.conditions // []) | any(.type == "Established" and .status == "True")' >/dev/null; then
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "❌ Timed out waiting for CRD $crd to be Established"
+              kubectl get crd "$crd" --context "{{.CONTEXT}}" -o yaml || true
+              exit 1
+            fi
+            sleep 1
+          done
+        done
+      # Wait for the operator deployment itself to be ready.
       - kubectl wait deployment/strimzi-cluster-operator -n infrastructure --for=condition=Available --timeout=60s --context "{{.CONTEXT}}"
 
   deploy:postgres:
     run: once
     deps: [init:namespace]
     cmds:
-      - echo "🏗️  Deploying Postgres Database..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "postgres")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - echo "🏗️  Deploying PostgreSQL Database..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "postgres" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
       - kubectl wait deployment/postgres -n infrastructure --for=condition=Available --timeout=120s --context "{{.CONTEXT}}"
 
   deploy:cloudbeaver:
     run: once
-    deps: [deploy:postgres]
+    deps: [deploy:postgres] # CloudBeaver depends on Postgres being ready.
     cmds:
-      - echo "🏗️  Deploying CloudBeaver..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "cloudbeaver")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - echo "🏗️  Deploying CloudBeaver UI..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "cloudbeaver" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
 
   deploy:kafka:nodepools:
     run: once
-    deps: [deploy:strimzi]
+    deps: [deploy:strimzi] # NodePools are a Strimzi CRD, so the operator must be ready.
     cmds:
       - echo "🏗️  Deploying Kafka NodePools..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-nodepool")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-nodepool" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
 
   deploy:kafka:cluster:
     run: once
-    deps: [deploy:kafka:nodepools]
+    deps: [deploy:kafka:nodepools] # The Kafka cluster depends on the NodePools.
     cmds:
       - echo "🏗️  Deploying Kafka Cluster..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-cluster")' | kubectl apply -f - --context "{{.CONTEXT}}"
-      - kubectl wait kafka/{{.KAFKA_NAME}} -n infrastructure --for=condition=Ready --timeout=300s --context "{{.CONTEXT}}"
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-cluster" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      # Wait for the `Kafka` custom resource to report a 'Ready' status. This can take several minutes.
+      - kubectl wait kafka/{{.KAFKA_NAME}} -n infrastructure --for=condition=Ready --timeout=600s --context "{{.CONTEXT}}"
 
   deploy:schema-registry:
     run: once
-    deps: [deploy:kafka:cluster]
+    deps: [deploy:kafka:cluster] # Schema Registry depends on the Kafka cluster.
     cmds:
-      - echo "🏗️  Deploying Schema Registry..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "schema-registry")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - echo "🏗️  Deploying Apicurio Schema Registry..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "schema-registry" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
       - kubectl wait deployment/schema-registry -n infrastructure --for=condition=Available --timeout=120s --context "{{.CONTEXT}}"
 
   deploy:kafka:connect:
     run: once
-    deps: [deploy:kafka:cluster, deploy:schema-registry]
+    deps: [deploy:kafka:cluster, deploy:schema-registry] # Kafka Connect needs both Kafka and Schema Registry.
     cmds:
       - echo "🏗️  Deploying Kafka Connect..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-connect")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "kafka-connect" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
 
   deploy:redpanda:
     run: once
-    deps: [deploy:schema-registry, deploy:kafka:connect]
+    deps: [deploy:schema-registry, deploy:kafka:connect] # The UI depends on the backend services.
     cmds:
-      - echo "🏗️  Deploying Redpanda Console..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "redpanda")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - echo "🏗️  Deploying Redpanda Console (Kafka UI)..."
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "redpanda" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
 
   deploy:karapace:
     run: once
-    deps: [deploy:schema-registry]
+    deps: [deploy:schema-registry] # The REST proxy depends on Kafka and Schema Registry.
     cmds:
       - echo "🏗️  Deploying Karapace REST Proxy..."
-      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "karapace")' | kubectl apply -f - --context "{{.CONTEXT}}"
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "karapace" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}"
 
   provision:kafka:
-    desc: "Provision topics and schemas from definitions."
+    desc: "📜 Provision Kafka topics and register schemas from definition files."
     deps: [deploy:kafka:cluster, deploy:schema-registry]
     cmds:
-      - echo "🚀 Provisioning Kafka resources..."
+      # Apply all the rendered KafkaTopic manifests.
+      - echo "🚀 Provisioning Kafka topics..."
       - kubectl apply -f definitions/rendered/ --context "{{.CONTEXT}}"
       - |
+        # This block handles schema registration. It waits for the Schema Registry API
+        # to be available and then iterates through the topic definitions.
         SR_PORT=$(yq e '.settings.schema_registry.port' config.yaml)
         REGISTRY_URL="http://localhost:${SR_PORT}/apis/ccompat/v7"
-        
+
         echo "⏳ Waiting for Schema Registry API to be responsive..."
         MAX_RETRIES=30
         COUNT=0
+        # Loop until the Schema Registry API responds successfully.
         while ! curl -s -f "$REGISTRY_URL/subjects" > /dev/null; do
           [ $COUNT -eq $MAX_RETRIES ] && echo "❌ Schema Registry timed out" && exit 1
           sleep 2
           COUNT=$((COUNT + 1))
         done
 
+        # Iterate through each topic definition JSON file.
         for f in definitions/topics/*.json; do
           TOPIC_NAME=$(jq -r '.topic_name' "$f")
+          # For each topic, iterate through its associated schema values.
           jq -c '.values[]?' "$f" | while read -r schema_ref; do
             SCHEMA_NAME=$(echo "$schema_ref" | jq -r '.schema')
+            # Find the schema file by checking for different extensions (.avsc, .json).
             for ext in avsc avdl json; do
               if [ -f "definitions/schemas/$SCHEMA_NAME.$ext" ]; then
-                echo "📝 Registering schema for $TOPIC_NAME: $SCHEMA_NAME..."
+                echo "📝 Registering schema '$SCHEMA_NAME.$ext' for topic '$TOPIC_NAME'..."
+                # Use curl to POST the schema to the registry under the subject name '{topic-name}-value'.
                 RESPONSE=$(curl -s -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" \
                      --data "{\"schema\": $(jq -Rs . "definitions/schemas/$SCHEMA_NAME.$ext")}" \
                      "$REGISTRY_URL/subjects/${TOPIC_NAME}-value/versions")
@@ -344,44 +619,45 @@ tasks:
                 else
                   echo "❌ Failed to register schema: $RESPONSE"
                 fi
-                break
+                break # Move to the next topic once the schema is found and processed.
               fi
             done
           done
         done
 
   # ===========================================================================
-  # UTILITIES
+  # § UTILITIES & HELPER TASKS
   # ===========================================================================
 
   status:
-    desc: "Check health and resource usage of all components."
+    desc: "📊 Check health and resource usage of all components."
     cmds:
-      - echo "📊 Component Status & Resource Usage (Namespace infrastructure)"
+      - 'echo "📊 Component Status & Resource Usage (Namespace: infrastructure)"'
       - |
-        # Headers with wider name column and clear separators
+        # This script provides a formatted, human-readable summary of the pods,
+        # their status, and their current resource consumption compared to their requests and limits.
         printf "%-50s %-12s | %-8s %-8s %-8s | %-8s %-8s %-8s\n" "POD" "STATUS" "CPU REQ" "CPU LIM" "CPU USE" "MEM REQ" "MEM LIM" "MEM USE"
         printf "%-50s %-12s | %-8s %-8s %-8s | %-8s %-8s %-8s\n" "--------------------------------------------------" "------" "-------" "-------" "-------" "-------" "-------" "-------"
-        
-        # Get pod list and status
-        PODS=$(kubectl get pods -n infrastructure --context "{{.CONTEXT}}" -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.phase}{"\n"}{end}')
-        
-        # Get usage metrics
+
+        # Get pod list and status using custom columns to avoid complex jsonpath interpolation warnings.
+        PODS=$(kubectl get pods -n infrastructure --context "{{.CONTEXT}}" -o custom-columns=NAME:.metadata.name,PHASE:.status.phase --no-headers)
+
+        # Get usage metrics from `kubectl top`.
         METRICS=$(kubectl top pods -n infrastructure --context "{{.CONTEXT}}" --no-headers 2>/dev/null || true)
-        
+
         while read -r line; do
           [ -z "$line" ] && continue
           NAME=$(echo "$line" | cut -f1)
           PHASE=$(echo "$line" | cut -f2)
           
-          # Extract Requests/Limits using a single call to optimize
+          # Extract resource requests and limits from the pod spec.
           JSON=$(kubectl get pod "$NAME" -n infrastructure --context "{{.CONTEXT}}" -o json 2>/dev/null || echo "{}")
           REQ_CPU=$(echo "$JSON" | jq -r '.spec.containers[0].resources.requests.cpu // "-"' 2>/dev/null)
           LIM_CPU=$(echo "$JSON" | jq -r '.spec.containers[0].resources.limits.cpu // "-"' 2>/dev/null)
           REQ_MEM=$(echo "$JSON" | jq -r '.spec.containers[0].resources.requests.memory // "-"' 2>/dev/null)
           LIM_MEM=$(echo "$JSON" | jq -r '.spec.containers[0].resources.limits.memory // "-"' 2>/dev/null)
           
-          # Extract Usage
+          # Extract current usage from the metrics output.
           USE_CPU=$(echo "$METRICS" | grep "^$NAME " | awk '{print $2}' || echo "0m")
           USE_MEM=$(echo "$METRICS" | grep "^$NAME " | awk '{print $3}' || echo "0Mi")
           
@@ -389,19 +665,23 @@ tasks:
         done <<< "$PODS"
 
   status:watch:
-    desc: "Watch component status and resource usage in real-time."
+    desc: "👀 Watch component status and resource usage in real-time."
     cmds:
+      # Uses `watch` to run the `status` task every 2 seconds.
       - watch -n 2 task status
 
   init:namespace:
     internal: true
     cmds:
+      # Creates the 'infrastructure' namespace where all services will be deployed.
+      # Using `dry-run` and `apply` makes the command idempotent.
       - kubectl create namespace infrastructure --dry-run=client -o yaml | kubectl apply -f - --context "{{.CONTEXT}}"
 
   check:deps:
     internal: true
     cmds:
       - |
+        # This task checks if all required command-line tools are installed.
         MISSING_DEPS=""
         for tool in kind kubectl yq jq bc curl watch; do
           if ! command -v $tool &> /dev/null; then
@@ -409,8 +689,9 @@ tasks:
           fi
         done
 
+        # If dependencies are missing, it offers to install them using Homebrew (if available).
         if [ -n "$MISSING_DEPS" ]; then
-          echo "❌ Missing dependencies: $MISSING_DEPS"
+          echo "❌ Missing dependencies:$MISSING_DEPS"
           if command -v brew &> /dev/null; then
             read -p "❓ Do you want to install them via Homebrew? (y/n) " REPLY
             echo
@@ -429,3 +710,17 @@ tasks:
           fi
         fi
         echo "✅ All dependencies found."
+
+  deploy:telemetry:
+    run: once
+    deps: [init:namespace]
+    cmds:
+      - echo "🏗️  Deploying Telemetry Stack (OTel, Prometheus, Grafana, KSM)..."
+      # Applies all telemetry-related components. `--server-side` and `--force-conflicts`
+      # help manage ownership of fields when applying large, complex resources like Grafana dashboards.
+      - kustomize build k8s/components/overlays/local | yq 'select(.metadata.labels.component == "otel-collector" or .metadata.labels.component == "prometheus" or .metadata.labels.component == "grafana" or .metadata.labels.component == "kube-state-metrics" or .metadata.labels.component == "common")' | kubectl apply -f - --context "{{.CONTEXT}}" --server-side --force-conflicts
+      # Wait for each component of the telemetry stack to become available.
+      - kubectl wait deployment/prometheus -n infrastructure --for=condition=Available --timeout=120s --context "{{.CONTEXT}}"
+      - kubectl wait deployment/grafana -n infrastructure --for=condition=Available --timeout=120s --context "{{.CONTEXT}}"
+      - kubectl wait deployment/otel-collector -n infrastructure --for=condition=Available --timeout=120s --context "{{.CONTEXT}}"
+      - kubectl wait deployment/kube-state-metrics -n infrastructure --for=condition=Available --timeout=120s --context "{{.CONTEXT}}"

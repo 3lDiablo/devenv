@@ -1,0 +1,241 @@
+# ==============================================================================
+#
+#               Kustomize Replacements - Telemetry Stack
+#
+# ==============================================================================
+#
+# Overview:
+#   This file defines the Kustomize `replacements` for the entire telemetry
+#   stack, including Prometheus, Grafana, OTel Collector, and the exporters.
+#   It maps values from the `global-values` ConfigMap to the appropriate fields
+#   in the various base manifests.
+#
+# ==============================================================================
+
+# --- 1. IMAGES ---
+- source:
+    fieldPath: data.images_prometheus_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.image]
+    select: {kind: Deployment, name: prometheus}
+- source:
+    fieldPath: data.images_grafana_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.image]
+    select: {kind: Deployment, name: grafana}
+- source:
+    fieldPath: data.images_otel_collector_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.image]
+    select: {kind: Deployment, name: otel-collector}
+- source:
+    fieldPath: data.images_postgres_exporter_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  # The postgres-exporter is the second container in the postgres pod.
+  - fieldPaths: [spec.template.spec.containers.1.image]
+    select: {kind: Deployment, name: postgres}
+- source:
+    fieldPath: data.images_kube_state_metrics_full
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.image]
+    select: {kind: Deployment, name: kube-state-metrics}
+
+# --- 2. PORTS & CREDENTIALS ---
+# Postgres Exporter credentials
+- source:
+    fieldPath: data.settings_postgres_user
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.1.env.0.value]
+    select: {kind: Deployment, name: postgres}
+- source:
+    fieldPath: data.settings_postgres_password
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.1.env.1.value]
+    select: {kind: Deployment, name: postgres}
+# Grafana admin credentials
+- source:
+    fieldPath: data.settings_telemetry_grafana_admin_user
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.env.0.value]
+    select: {kind: Deployment, name: grafana}
+- source:
+    fieldPath: data.settings_telemetry_grafana_admin_password
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.env.1.value]
+    select: {kind: Deployment, name: grafana}
+# Prometheus ports
+- source:
+    fieldPath: data.settings_telemetry_prometheus_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.ports.0.port, spec.ports.0.targetPort]
+    select: {kind: Service, name: prometheus}
+  - fieldPaths: [spec.template.spec.containers.0.ports.0.containerPort]
+    select: {kind: Deployment, name: prometheus}
+# Grafana ports
+- source:
+    fieldPath: data.settings_telemetry_grafana_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.ports.0.port, spec.ports.0.targetPort]
+    select: {kind: Service, name: grafana}
+  - fieldPaths: [spec.template.spec.containers.0.ports.0.containerPort]
+    select: {kind: Deployment, name: grafana}
+# NodePorts
+- source:
+    fieldPath: data.cluster_ports_7_node # prometheus
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.ports.0.nodePort]
+    select: {kind: Service, name: prometheus}
+- source:
+    fieldPath: data.cluster_ports_8_node # grafana
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.ports.0.nodePort]
+    select: {kind: Service, name: grafana}
+# OTel Collector ports
+- source:
+    fieldPath: data.settings_telemetry_otel_collector_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.ports.0.containerPort]
+    select: {kind: Deployment, name: otel-collector}
+  - fieldPaths: [spec.ports.0.port, spec.ports.0.targetPort]
+    select: {kind: Service, name: otel-collector}
+- source:
+    fieldPath: data.settings_telemetry_otel_collector_metrics_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.ports.1.containerPort]
+    select: {kind: Deployment, name: otel-collector}
+- source:
+    fieldPath: data.settings_telemetry_otel_collector_exporter_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.ports.1.port, spec.ports.1.targetPort]
+    select: {kind: Service, name: otel-collector}
+# Kube State Metrics ports
+- source:
+    fieldPath: data.settings_telemetry_common_metrics_port
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.ports.0.port, spec.ports.0.targetPort]
+    select: {kind: Service, name: kube-state-metrics}
+  - fieldPaths: [spec.template.spec.containers.0.ports.0.containerPort]
+    select: {kind: Deployment, name: kube-state-metrics}
+
+# --- 3. RESOURCES ---
+# OTel Collector
+- source:
+    fieldPath: data.settings_telemetry_otel_collector_resources_cpu_request
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.requests.cpu]
+    select: {kind: Deployment, name: otel-collector}
+- source:
+    fieldPath: data.settings_telemetry_otel_collector_resources_cpu_limit
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.limits.cpu]
+    select: {kind: Deployment, name: otel-collector}
+- source:
+    fieldPath: data.settings_telemetry_otel_collector_resources_memory_request
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.requests.memory]
+    select: {kind: Deployment, name: otel-collector}
+- source:
+    fieldPath: data.settings_telemetry_otel_collector_resources_memory_limit
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.limits.memory]
+    select: {kind: Deployment, name: otel-collector}
+# Prometheus
+- source:
+    fieldPath: data.settings_telemetry_prometheus_resources_cpu_request
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.requests.cpu]
+    select: {kind: Deployment, name: prometheus}
+- source:
+    fieldPath: data.settings_telemetry_prometheus_resources_cpu_limit
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.limits.cpu]
+    select: {kind: Deployment, name: prometheus}
+- source:
+    fieldPath: data.settings_telemetry_prometheus_resources_memory_request
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.requests.memory]
+    select: {kind: Deployment, name: prometheus}
+- source:
+    fieldPath: data.settings_telemetry_prometheus_resources_memory_limit
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.limits.memory]
+    select: {kind: Deployment, name: prometheus}
+# Grafana
+- source:
+    fieldPath: data.settings_telemetry_grafana_resources_cpu_request
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.requests.cpu]
+    select: {kind: Deployment, name: grafana}
+- source:
+    fieldPath: data.settings_telemetry_grafana_resources_cpu_limit
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.limits.cpu]
+    select: {kind: Deployment, name: grafana}
+- source:
+    fieldPath: data.settings_telemetry_grafana_resources_memory_request
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.requests.memory]
+    select: {kind: Deployment, name: grafana}
+- source:
+    fieldPath: data.settings_telemetry_grafana_resources_memory_limit
+    kind: ConfigMap
+    name: global-values
+  targets:
+  - fieldPaths: [spec.template.spec.containers.0.resources.limits.memory]
+    select: {kind: Deployment, name: grafana}

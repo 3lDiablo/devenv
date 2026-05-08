@@ -1,0 +1,35 @@
+# ==============================================================================
+#
+#               Grafana - Dashboard Provider Provisioning
+#
+# ==============================================================================
+#
+# Overview:
+#   This file is part of a ConfigMap that configures a "dashboard provider" in
+#   Grafana. A dashboard provider tells Grafana where to look for dashboard
+#   definition files (in JSON format).
+#
+#   When Grafana starts, it scans the `/etc/grafana/provisioning/dashboards`
+#   directory for YAML files like this one and configures the providers accordingly.
+#
+#   This specific provider tells Grafana to look for dashboard JSON files in the
+#   `/var/lib/grafana/dashboards` directory inside the pod. The Grafana deployment
+#   is configured to mount a ConfigMap containing the actual dashboards into that
+#   exact directory.
+#
+# ==============================================================================
+
+# Specifies the version of Grafana's provisioning API.
+apiVersion: 1
+# A list of dashboard providers to configure.
+providers:
+- name: 'Default' # A unique name for the provider.
+  orgId: 1 # The organization ID to associate the dashboards with.
+  folder: '' # An optional folder name in the Grafana UI. Empty means the root folder.
+  type: file # The type of provider. `file` means Grafana will scan a directory on disk.
+  disableDeletion: false # If true, dashboards removed from the disk will not be deleted from the UI.
+  editable: true # Allows users to edit the dashboards from the UI. Changes will be lost if the pod restarts unless saved elsewhere.
+  options:
+    # The path inside the container where Grafana should look for dashboard JSON files.
+    # This path matches the `mountPath` for the dashboards volume in the Grafana deployment.
+    path: /var/lib/grafana/dashboards

@@ -1,5 +1,26 @@
+# ==============================================================================
+#
+#               CloudBeaver - Main Configuration Template
+#
+# ==============================================================================
+#
+# Overview:
+#   This file is a template for CloudBeaver's primary configuration (`cloudbeaver.conf`).
+#   CloudBeaver uses a database to store its own internal state, such as user
+#   accounts, saved connections, and settings. This configuration tells CloudBeaver
+#   how to connect to the PostgreSQL database for this purpose.
+#
+# Rendering:
+#   This is a template file, not a final configuration. The `Taskfile`'s
+#   `render:cloudbeaver` task processes this file using `yq`. It injects the
+#   database URL, user, and password from `config.yaml` to produce the final
+#   `cloudbeaver.conf` file. This final file is then stored in a ConfigMap and
+#   mounted into the CloudBeaver pod.
+#
+# ==============================================================================
 {
     "server": {
+        "serverName": "CloudBeaver",
         "serverPort": 8978,
         "workspaceLocation": "workspace",
         "contentRoot": "web",
@@ -16,7 +37,6 @@
             "user": "POSTGRES_USER",
             "password": "POSTGRES_PASSWORD",
             "createDatabase": true,
-            "initialDataConfiguration": "conf/initial-data.conf",
             "pool": {
                 "minIdleConnections": 4,
                 "maxIdleConnections": 10,
